@@ -1,0 +1,57 @@
+# =====================================================================
+# K-TIDE — PUBLIC repository. Professor materials and derived data
+# must NEVER be committed. See docs/research/research_protocol.md.
+# =====================================================================
+
+# --- Private data & professor materials ---
+/data_private/
+/notebooks/private/
+/NLP/
+TEST_Qwen25_SFT.ipynb
+NLP.zip
+*.pdf
+
+# --- Experiment outputs, checkpoints, submissions ---
+/runs/
+/outputs/
+/checkpoints/
+/models/
+/submission/
+/mlruns/
+/mlartifacts/
+/hf_cache/
+
+# --- Model weights & archives ---
+*.safetensors
+*.gguf
+*.pt
+*.pth
+*.bin
+*.zip
+
+# --- Secrets ---
+.env
+.env.*
+!.env.example
+secrets/
+
+# --- Python / tooling ---
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+.DS_Store
+__MACOSX/
+
+# --- LaTeX build artifacts ---
+*.aux
+*.log
+*.out
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+*.bbl
+*.blg

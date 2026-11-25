@@ -1,0 +1,41 @@
+[project]
+name = "ktide"
+version = "0.1.0"
+description = "K-TIDE: Terminology-aware instruction tuning with domain enrichment for Korean NLP QA"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+dependencies = [
+    # Pinned to match the professor's evaluation notebook.
+    "transformers==4.57.1",
+    "accelerate==1.11.0",
+    "huggingface_hub==0.36.0",
+    "safetensors==0.6.2",
+    # torch is not pinned by the notebook (Colab preinstalled); recorded in environment.json.
+    "torch>=2.6",
+    "requests>=2.32",
+    "pydantic>=2.9",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "ruff>=0.8",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ktide"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
