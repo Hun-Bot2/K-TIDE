@@ -1,0 +1,50 @@
+% K-TIDE — ACL Long Paper draft (target: NAACL 2027 Student Research Workshop, archival,
+% deadline 2027-01-11 AoE, double-blind). The paper never mentions the course assignment,
+% its grading, or the instructor's evaluation (docs/research/goals_and_timeline.md).
+% Build: see paper/README.md. Requires acl.sty and acl_natbib.bst from
+% https://github.com/acl-org/acl-style-files (not yet vendored into this repo).
+\documentclass[11pt]{article}
+\usepackage[review]{acl}
+
+\usepackage{times}
+\usepackage{latexsym}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{microtype}
+\usepackage{inconsolata}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{xcolor}
+
+% Draft markers. Every \pending{} must be resolved before submission.
+\newcommand{\pending}[1]{\textcolor{red}{[PENDING: #1]}}
+\newcommand{\todo}[1]{\textcolor{orange}{[TODO: #1]}}
+
+\title{K-TIDE: An Empirical Study of Knowledge Enrichment and\\
+Terminology-Aware Instruction Tuning for Korean Question Answering}
+
+\author{Anonymous submission}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+\pending{Write after the main experiments (RQ1, RQ2) are complete. No numbers before then.}
+\end{abstract}
+
+\input{sections/01_introduction}
+\input{sections/02_related_work}
+\input{sections/03_method}
+\input{sections/04_experimental_setup}
+\input{sections/05_results}
+\input{sections/06_conclusion}
+\input{sections/07_limitations}
+\input{sections/08_ethics}
+
+\bibliography{references}
+
+\appendix
+\input{sections/appendix}
+
+\end{document}

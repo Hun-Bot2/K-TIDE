@@ -1,0 +1,33 @@
+% Related Work — OUTLINE ONLY. No \cite until each paper is verified against the original
+% (authors, year, venue, actual claims). Candidates come from the project's master prompt.
+\section{Related Work}
+\label{sec:related}
+
+\todo{Write after literature verification (docs/research/literature_review.md).}
+
+\paragraph{Small models and knowledge distillation.}
+% Candidates (unverified): DistilQwen2.5 (ACL 2025 Industry); Distilling Step-by-Step (Findings ACL 2023);
+% Textbooks Are All You Need II (tech report 2023; pre-training, not SFT); Qwen2.5 Technical Report (2024).
+\todo{Position black-box teacher distillation for small models; our teacher writes knowledge and QA, the student is trained on final answers only.}
+
+\paragraph{Data quality and domain knowledge injection.}
+% Candidates (unverified): KEFT (TACL 2025); AlpaGasus (ICLR 2024); LESS (ICML 2024; gradient-based selection,
+% do not conflate with error-based selection); LIMA (NeurIPS 2023); Synthetic Knowledge Ingestion (EMNLP 2024);
+% CRAFT Your Dataset (TACL 2025); Deduplicating Training Data (ACL 2022; pre-training scale);
+% Does Fine-Tuning LLMs on New Knowledge Encourage Hallucinations? (EMNLP 2024).
+\todo{Relate to RQ1 and to the risk of hallucination when fine-tuning on new knowledge.}
+
+\paragraph{Cross-lingual transfer, code-mixing and terminology.}
+% Candidates (unverified): Code-Switching Curriculum Learning (Findings ACL 2025); COMMIT (Findings NAACL 2024);
+% Can Code-Switched Texts Activate a Knowledge Switch in LLMs? (Findings EMNLP 2025);
+% Good Data or Bad Multilingual Evaluation? (EMNLP 2024); Training NMT to Apply Terminology Constraints (ACL 2019);
+% Understanding and Mitigating Language Confusion (EMNLP 2024); GLADIS acronym disambiguation (EACL 2023).
+\todo{Relate to RQ2: terminology constraints, acronym disambiguation, translated vs.\ native target-language data.}
+
+\paragraph{LLM-as-a-judge.}
+% Candidates (unverified): Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena (NeurIPS 2023); G-Eval (EMNLP 2023).
+\todo{Motivate repeated judging, anonymization and human agreement checks.}
+
+\paragraph{Parameter-efficient fine-tuning.}
+% Candidates (unverified): LoRA (ICLR 2022); QLoRA (NeurIPS 2023; quantized training is out of scope here).
+\todo{Only as needed for RQ4.}

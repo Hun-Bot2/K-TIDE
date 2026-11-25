@@ -1,0 +1,15 @@
+\section{Reproducibility note: saved generation settings can change decoding}
+\label{app:genconfig}
+
+Our inference code passes an explicit greedy configuration to \texttt{generate} (\texttt{do\_sample=False}, one beam).
+In the library version we use (\texttt{transformers} 4.57.1), the model's saved \texttt{generation\_config.json} still overrides every field that the caller left at its global default, provided the file records a library version of 4.50 or later.
+\texttt{do\_sample=False} is itself the global default, so it can be overridden.
+
+The released \texttt{Qwen2.5-1.5B-Instruct} configuration specifies sampling (temperature 0.7, top-$p$ 0.8, top-$k$ 20, repetition penalty 1.1), but it records library version 4.37.0, so the override does not apply and decoding stays greedy.
+Saving a fine-tuned model with \texttt{save\_pretrained} rewrites the recorded version to 4.57.1.
+With the same inference code, the fine-tuned model is then decoded by sampling with these settings.
+We verified both cases by computing the effective generation configuration in a weight-free (meta-device) instantiation of the model.
+
+Comparing a greedy baseline against sampled fine-tuned models would confound the comparison.
+We therefore copy the original \texttt{generation\_config.json} byte for byte into every evaluated checkpoint.
+We also check the effective configuration before each evaluation.
