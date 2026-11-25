@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from ktide.knowledge.build import DOMAINS, FACETS
+from ktide.knowledge.cku import read_jsonl
 from ktide.knowledge.coverage import coverage_stats, depth, required_facets
 from ktide.professor import REPO_ROOT
 
@@ -45,6 +46,17 @@ def test_private_concept_map():
         assert (file, page) in allowed
 
     document = read(MAP)
+    added_path = PRIVATE / "knowledge/cku_v2_1_new_concepts.json"
+    p2f_visual = {}
+    if added_path.is_file():
+        added = {row["term"]: row["concept_id"] for row in read(added_path)["added"]}
+        for row in read_jsonl(extracted / "visual_terms.jsonl"):
+            for term in row["concepts"]:
+                key = added.get(term["new_term"])
+                if key:
+                    p2f_visual.setdefault(key, set()).add(
+                        (row["source"]["file"], row["source"]["page"])
+                    )
     assert document["schema_version"] == 2
     assert read(MAP.with_name("concept_map.p2b.json"))["schema_version"] == 1
     for row in transcripts:
@@ -113,7 +125,9 @@ def test_private_concept_map():
                 method = source["evidence"]
                 assert method in {"text_layer", "visual_read"}
                 if method == "visual_read":
-                    assert (source["file"], source["page"]) in seen
+                    assert (source["file"], source["page"]) in (
+                        seen | p2f_visual.get(item["concept_id"], set())
+                    )
                 methods.add(method)
             expected = "both" if len(methods) == 2 else next(iter(methods), None)
             assert facet["evidence"] == expected

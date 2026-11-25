@@ -7,6 +7,8 @@
 /data_private/
 /notebooks/private/
 /NLP/
+/Speech-Language/
+/report_course/
 TEST_Qwen25_SFT.ipynb
 NLP.zip
 *.pdf

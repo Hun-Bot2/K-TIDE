@@ -25,7 +25,7 @@ FIELDS = (
     "terminology",
     "lecture_alignment",
 )
-BASIS = {"lecture", "external_reference", "model_knowledge"}
+BASIS = {"lecture", "external_reference", "model_knowledge", "slp_textbook"}
 
 
 def read_jsonl(path):

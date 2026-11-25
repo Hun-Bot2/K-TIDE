@@ -22,6 +22,13 @@
 - 아직 하지 않는다: 모델 학습, 외부 데이터 대량 다운로드, 합성 QA 대량 생성.
   단계를 넘어가기 전에는 사용자의 검토와 승인을 받는다.
 
+### 두 개의 문서 트랙
+
+- **트랙 A — 과제 보고서** (`report_course/`, gitignore): 교수님께 제출. 과제 조건, 교수님 노트북, 공개 질문 결과를 다룰 수 있다.
+- **트랙 B — 학회 논문** (`paper/`, 공개): NAACL 2027 SRW. **과제·채점·교수님 평가를 언급하지 않는다.** 집계 수치만 쓴다.
+- 두 트랙의 내용을 섞지 않는다. 트랙 A 내용을 `paper/`나 공개 문서에 옮기지 않는다.
+- 상세: `docs/research/goals_and_timeline.md`
+
 ## 3. 비공개 경계 (가장 중요)
 
 이 저장소는 **공개(PUBLIC) GitHub 저장소**다. 다음은 절대 커밋하거나 외부에 공개하지 않는다.
@@ -29,6 +36,8 @@
 | 비공개 대상 | 위치 |
 |---|---|
 | 교수님 강의 PDF 및 노트북 | `NLP/` (읽기 전용) |
+| 공식 교재 SLP 일부 장(All rights reserved) | `Speech-Language/` (읽기 전용, `_excluded/`는 범위 밖이므로 사용 금지) |
+| 교재에서 파생한 텍스트·근거 | `data_private/external/slp/` |
 | 교수님 평가 노트북 원본 | `data_private/professor/TEST_Qwen25_SFT.ipynb`, 루트의 `TEST_Qwen25_SFT.ipynb` |
 | 교수님 공개 질문 11개, 모델 답변, Judge 결과 | `runs/`, `data_private/colab_outputs/` |
 | 강의에서 추출한 텍스트·이미지·용어집·QA 등 모든 파생 데이터 | `data_private/` 아래에만 저장 |

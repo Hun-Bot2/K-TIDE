@@ -3,7 +3,15 @@ import subprocess
 
 from ktide.professor import REPO_ROOT
 
-FORBIDDEN_PREFIXES = ("data_private/", "runs/", "checkpoints/", "submission/", "NLP/")
+FORBIDDEN_PREFIXES = (
+    "data_private/",
+    "runs/",
+    "checkpoints/",
+    "submission/",
+    "NLP/",
+    "Speech-Language/",
+    "report_course/",
+)
 FORBIDDEN_SUFFIXES = (".pdf", ".zip", ".safetensors", ".ipynb")
 
 

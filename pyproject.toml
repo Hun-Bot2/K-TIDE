@@ -15,12 +15,16 @@ dependencies = [
     "torch>=2.6",
     "requests>=2.32",
     "pydantic>=2.9",
+    "wandb>=0.31.2",
 ]
 
 [dependency-groups]
 dev = [
     "pytest>=8.3",
     "ruff>=0.8",
+]
+train = [
+    "peft>=0.17,<0.18",
 ]
 
 [build-system]
@@ -39,3 +43,9 @@ select = ["E", "F", "I", "B", "UP"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff.lint.per-file-ignores]
+# Korean prompt text counts double-width; keep prompts readable.
+"src/ktide/evalset/answerability.py" = ["E501"]
+"src/ktide/evalset/score.py" = ["E501"]
+"src/ktide/train/*.py" = ["E501"]
