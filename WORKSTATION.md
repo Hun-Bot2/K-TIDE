@@ -28,9 +28,13 @@ uv run --group train --with ipykernel --with nbconvert jupyter nbconvert --to no
 # full: 학습 → 내보내기·검증 → during_development 답변 생성 → 결과 zip
 KTIDE_RUN_MODE=full uv run --group train --with ipykernel --with nbconvert jupyter nbconvert --to notebook --execute \
   --ExecutePreprocessor.timeout=-1 --output-dir /tmp --output gpu_train_full notebooks/gpu_train_lora.ipynb
+
+# M2 (영어 용어 보존, M1과 같은 번들·같은 QA 쌍): KTIDE_CONDITION=M2 를 앞에 붙인다
+KTIDE_CONDITION=M2 KTIDE_RUN_MODE=full uv run --group train --with ipykernel --with nbconvert jupyter nbconvert --to notebook --execute \
+  --ExecutePreprocessor.timeout=-1 --output-dir /tmp --output gpu_train_m2_full notebooks/gpu_train_lora.ipynb
 ```
 
-조건·데이터를 바꿀 때는 노트북 설정 셀(`BUNDLE`, `BUNDLE_SHA256`, `QA`, `VARIANT`, `CONDITION`, `DATA`)만 바꾼다.
+조건·데이터를 바꿀 때는 M1·M2는 `KTIDE_CONDITION`(기본 `M1`)으로 고르고, 번들이 바뀌는 M3·M4는 노트북 설정 셀(`BUNDLE`, `BUNDLE_SHA256`, `QA`, `DATA`)을 바꾼다.
 학습 파라미터, seed, `PRECISION = "fp16"`은 통제 실험에서 바꾸지 않는다.
 
 ## 2. 로컬로 결과 가져오기 (Mac)
