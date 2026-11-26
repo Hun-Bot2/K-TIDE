@@ -71,3 +71,19 @@ def test_unsafe_archive_rejected(tmp_path):
         zf.writestr("train_config.json", "{}")
     with pytest.raises(ValueError, match="unsafe"):
         import_zip(archive, root=tmp_path)
+
+
+def test_sync_finds_only_new_result_zips(tmp_path):
+    import hashlib
+
+    from ktide.sync_workstation import pending
+
+    good = tmp_path / "a" / "M1_custom_name.zip"
+    good.parent.mkdir()
+    make_zip(good)
+    other = tmp_path / "notes.zip"
+    with zipfile.ZipFile(other, "w") as zf:
+        zf.writestr("readme.txt", "x")
+    assert pending(tmp_path, {}) == [good]
+    ledger = {hashlib.sha256(good.read_bytes()).hexdigest(): {"zip": "a"}}
+    assert pending(tmp_path, ledger) == []

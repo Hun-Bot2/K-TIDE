@@ -48,7 +48,7 @@ All four fine-tuned models share the teacher model, concept coverage, question-t
 \paragraph{Rubric-based LLM judge.}
 Each answer is scored on accuracy, relevance and constraint compliance (1--5 each) from the question and answer alone.
 The judge is \texttt{gpt-6.2-sol} with medium reasoning effort, run through the Codex CLI in an empty working directory with no project context.
-All answers of a run are judged in one call; averages are recomputed from the sub-scores, and the raw judge output is kept.
+Answers are judged in batches of 20 per call; averages are recomputed from the sub-scores, and the raw judge output is kept.
 Answers are anonymized, so the judge never sees the model name or training condition.
 
 \paragraph{Judge variance and human agreement.}
@@ -70,5 +70,16 @@ terminology preservation rate (TPR) and acronym expansion accuracy (AEA), which 
 \paragraph{Uncertainty.}
 \pending{Paired bootstrap confidence intervals over evaluation items for every main comparison; interaction test for the $2\times2$ design.}
 
-\subsection{Compute}
-\pending{Hardware, run time, and cost per configuration.}
+\subsection{Training and compute}
+\label{sec:setup-compute}
+
+Each condition is trained with LoRA on all linear projections of the attention and MLP blocks (rank 16, $\alpha=32$, dropout 0.05), learning rate $10^{-4}$ with cosine decay and 3\% warm-up, three epochs, effective batch size 32, maximum length 256 tokens, and seed 42.
+The loss is computed on the assistant answer and its end-of-turn token only; the system prompt and question are masked.
+Five percent of the training examples are held out as a validation set for monitoring.
+The adapter is merged into the base weights in FP32, the merged model is saved in FP16, and the original generation configuration is restored (Appendix~\ref{app:genconfig}).
+
+All controlled runs are trained in FP16 mixed precision on a single GPU type (NVIDIA RTX 5000 Ada Generation) with FP32 adapter weights.
+We log the gradient-scaler scale and count non-finite loss or gradient-norm values in every run.
+For M1, training takes 27 optimizer steps (18.6\,s), and the run recorded no non-finite values and no reduction of the gradient scale.
+An earlier M1 run, trained in BF16 on a different GPU before the precision was fixed, is kept as a pilot and excluded from the main comparison (Appendix~\ref{app:precision}).
+\pending{Run times and GPU hours for M2--M4; judge cost.}

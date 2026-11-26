@@ -159,3 +159,10 @@ def test_run_pipeline_bundle_check(tmp_path):
     qa.write_text("changed\n")
     with pytest.raises(SystemExit, match="differ"):
         check_bundle(tmp_path, ["data_private/train/x/qa.jsonl"])
+
+
+def test_nested_config_subset_matches():
+    from ktide.tracking import same
+
+    assert same({"a": 1, "b": {"c": 2, "extra": 3}, "x": 0}, {"a": 1, "b": {"c": 2}})
+    assert not same({"a": 1, "b": {"c": 3}}, {"a": 1, "b": {"c": 2}})

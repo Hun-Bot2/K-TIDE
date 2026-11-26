@@ -13,3 +13,24 @@ We verified both cases by computing the effective generation configuration in a 
 Comparing a greedy baseline against sampled fine-tuned models would confound the comparison.
 We therefore copy the original \texttt{generation\_config.json} byte for byte into every evaluated checkpoint.
 We also check the effective configuration before each evaluation.
+
+\section{Training precision pilot}
+\label{app:precision}
+
+The first M1 run was trained on an NVIDIA T4.
+The software check for BF16 support reported that the GPU supports BF16, although the T4 has no native BF16 arithmetic, so the run trained in BF16.
+We kept this run as a pilot.
+We then fixed the training precision of every controlled run to FP16, the precision used at inference, and moved all controlled runs to one GPU type.
+BF16 is now selected only on GPUs with native support, and controlled runs request FP16 explicitly.
+
+Table~\ref{tab:precision-setup} compares the pilot with the controlled FP16 run of M1.
+Both use the same training data version, hyperparameters, seed and number of optimizer steps.
+They differ in training precision, training GPU and generation GPU, so the comparison cannot separate the effect of precision from that of the hardware.
+Table~\ref{tab:precision-metrics} lists the scores on the development split for both runs and the base model.
+Scores come from one judge pass without a significance test.
+The two runs produced identical answers on 63 of the 156 development items.
+Against the pilot, the FP16 run's reference verdict was higher on 12 items, unchanged on 137 and lower on 7.
+The final validation loss was 1.6828 for the pilot and 1.6721 for the FP16 run.
+These numbers describe the two runs only; we do not draw conclusions about precision from them.
+
+\input{generated/precision_tables}
