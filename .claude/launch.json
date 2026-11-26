@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "evalset-review",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": ["run", "python", "-m", "ktide.evalset.review_server", "--port", "8770"],
+      "port": 8770
+    }
+  ]
+}

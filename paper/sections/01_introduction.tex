@@ -1,0 +1,39 @@
+% Introduction — draft. Contribution bullets are provisional until results exist.
+% Do not mention the course assignment or its grading anywhere in the paper.
+\section{Introduction}
+\label{sec:intro}
+
+Small language models are attractive for domain-specific assistants because they are cheap to fine-tune and serve.
+Their weak point is specialized knowledge.
+For Korean technical question answering, this weakness takes a particular form.
+Technical Korean mixes Korean with English terms and acronyms, so a small model must both recognize the intended technical sense of a term and explain it correctly in Korean.
+Training data for this setting is scarce.
+The knowledge itself is mostly written in English, and the available domain material, such as lecture slides, is terse, redundant, and partly image-only.
+
+We study this \emph{resource-constrained, domain-specific} setting with a concrete task: answering short Korean questions about the content of a university NLP course with \texttt{Qwen2.5-1.5B-Instruct}.
+Answers must be one or two Korean sentences of at most 30 words, generated greedily, and are judged for accuracy, relevance and constraint compliance without a reference answer.
+
+When building fine-tuning data for such a model, two design choices are made almost by default, and their effects are rarely isolated.
+The first is \emph{where the knowledge comes from}: only the domain material at hand, or that material enriched with knowledge written by a larger teacher model.
+The second is \emph{how technical terms are written}: translated into Korean, or preserved in their original English form within Korean answers.
+We ask:
+\begin{itemize}
+\item[\textbf{RQ1}] Does enriching incomplete domain material with verified teacher-written knowledge improve answer accuracy over material-only data?
+\item[\textbf{RQ2}] Does Korean training data that preserves English technical terms improve terminology accuracy and answer accuracy compared with conventionally translated data?
+\item[\textbf{RQ3}] Do the two choices interact?
+\end{itemize}
+
+We answer these questions with a $2\times2$ factorial study rather than a new method.
+We cross knowledge source (lecture-only vs.\ enriched) with terminology policy (translated vs.\ term-preserving) and train all models from the same base model under matched data size, concept coverage and training budget.
+\pending{One or two sentences on the main findings, positive or negative, once available.}
+
+Our contributions are \todo{finalize after results}:
+\begin{itemize}
+\item A reproducible data-construction procedure for domain-specific QA.
+The domain material defines the concept scope, and teacher models write canonical knowledge for each concept.
+A second model verifies each unit, and material-derived and teacher-written knowledge are kept apart (\S\ref{sec:method}).
+\item A controlled $2\times2$ comparison of knowledge enrichment and terminology preservation, including their interaction, with repeated judging, human agreement checks and paired bootstrap intervals (\S\ref{sec:setup}).
+\pending{results}
+\item An evaluation that separates academic accuracy from terminology accuracy, together with an error analysis of terminology misreading and acronym misinterpretation \pending{results}.
+\item A reproducibility note: saving a fine-tuned model with a recent library version can silently switch a greedy evaluation to sampling (Appendix~\ref{app:genconfig}).
+\end{itemize}

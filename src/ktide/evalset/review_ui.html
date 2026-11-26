@@ -1,0 +1,407 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>평가셋 검토</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --text: #1d2330; --muted: #667085; --line: #e3e6eb;
+    --accent: #2f6fde; --ok: #1f8a4c; --edit: #b7791f; --bad: #c53030; --warn-bg: #fff6e0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #14171c; --panel: #1c2027; --text: #e6e9ef; --muted: #98a2b3; --line: #2c323c;
+            --accent: #6b9cf0; --ok: #48bb78; --edit: #ecc94b; --bad: #fc8181; --warn-bg: #3a3220; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.55 -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+         background: var(--bg); color: var(--text); }
+  header { display: flex; align-items: center; gap: 16px; padding: 10px 16px; background: var(--panel);
+           border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 2; flex-wrap: wrap; }
+  header h1 { font-size: 16px; margin: 0; }
+  .tabs button { border: 1px solid var(--line); background: transparent; color: var(--text);
+                 padding: 6px 12px; border-radius: 6px; cursor: pointer; }
+  .tabs button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .progress { flex: 1; min-width: 160px; }
+  .bar { height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; }
+  .bar > div { height: 100%; background: var(--ok); width: 0; transition: width .2s; }
+  .small { font-size: 12px; color: var(--muted); }
+  main { display: grid; grid-template-columns: 300px 1fr; gap: 0; height: calc(100vh - 54px); }
+  aside { border-right: 1px solid var(--line); background: var(--panel); overflow-y: auto; }
+  .filters { padding: 8px; display: flex; gap: 6px; flex-wrap: wrap; border-bottom: 1px solid var(--line);
+             position: sticky; top: 0; background: var(--panel); }
+  .filters select { flex: 1; padding: 4px; background: var(--panel); color: var(--text);
+                    border: 1px solid var(--line); border-radius: 4px; }
+  .row { padding: 7px 10px; border-bottom: 1px solid var(--line); cursor: pointer; display: flex; gap: 8px;
+         align-items: flex-start; }
+  .row:hover { background: var(--bg); }
+  .row.cur { background: var(--bg); box-shadow: inset 3px 0 var(--accent); }
+  .dot { width: 9px; height: 9px; border-radius: 50%; margin-top: 7px; flex: none; background: var(--line); }
+  .dot.accept { background: var(--ok); } .dot.edit { background: var(--edit); } .dot.reject { background: var(--bad); }
+  .row .q { font-size: 13px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .flag { color: var(--edit); font-size: 11px; }
+  section.card { overflow-y: auto; padding: 20px 28px 60px; }
+  .meta { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+  .badge { font-size: 12px; padding: 2px 8px; border-radius: 10px; background: var(--bg); border: 1px solid var(--line); }
+  .label { font-size: 12px; color: var(--muted); margin: 14px 0 4px; font-weight: 600; }
+  .question { font-size: 22px; font-weight: 600; }
+  .answer { font-size: 17px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
+  .warn { background: var(--warn-bg); border-radius: 8px; padding: 8px 12px; margin-top: 12px; font-size: 14px; }
+  .actions { display: flex; gap: 8px; margin-top: 20px; flex-wrap: wrap; }
+  .actions button { padding: 10px 18px; border-radius: 8px; border: 1px solid var(--line); cursor: pointer;
+                    font-size: 15px; background: var(--panel); color: var(--text); }
+  .b-accept { border-color: var(--ok) !important; color: var(--ok) !important; }
+  .b-edit { border-color: var(--edit) !important; color: var(--edit) !important; }
+  .b-reject { border-color: var(--bad) !important; color: var(--bad) !important; }
+  .actions button.sel { color: #fff !important; }
+  .b-accept.sel { background: var(--ok); } .b-edit.sel { background: var(--edit); } .b-reject.sel { background: var(--bad); }
+  textarea, input[type=text], select.full { width: 100%; padding: 8px 10px; border: 1px solid var(--line);
+       border-radius: 6px; background: var(--panel); color: var(--text); font: inherit; }
+  textarea { min-height: 64px; resize: vertical; }
+  .count.bad { color: var(--bad); font-weight: 600; }
+  .siblings div { font-size: 14px; padding: 4px 0; border-bottom: 1px dashed var(--line); }
+  .keys { margin-top: 24px; }
+  kbd { border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; font-size: 12px; }
+  .toast { position: fixed; bottom: 16px; right: 16px; background: var(--text); color: var(--bg);
+           padding: 8px 14px; border-radius: 8px; opacity: 0; transition: opacity .2s; }
+  .toast.on { opacity: .92; }
+  #human { padding: 20px 28px; overflow-y: auto; height: calc(100vh - 54px); display: none; }
+  #human .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  .hitem { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; background: var(--panel); }
+  .hitem button { float: right; border: none; background: none; color: var(--bad); cursor: pointer; }
+  @media (max-width: 800px) {
+    main { grid-template-columns: 1fr; height: auto; } aside { max-height: 35vh; }
+    #human .grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>평가셋 검토</h1>
+  <div class="tabs"><button id="tab-review" class="on">문항 검토</button> <button id="tab-human">직접 작성</button> <button id="tab-recheck">재확인</button></div>
+  <div class="progress"><div class="bar"><div id="bar"></div></div><div class="small" id="progress-text"></div></div>
+</header>
+
+<main id="review">
+  <aside>
+    <div class="filters">
+      <select id="f-status">
+        <option value="all">전체</option><option value="undecided" selected>미결정</option>
+        <option value="flagged">경고·메모 있음</option><option value="decided">결정됨</option>
+      </select>
+      <select id="f-split"><option value="all">모든 세트</option><option value="test_seen">test_seen</option>
+        <option value="test_unseen">test_unseen</option></select>
+    </div>
+    <div id="list"></div>
+  </aside>
+  <section class="card" id="card"></section>
+</main>
+
+<div id="human">
+  <div class="grid">
+    <div>
+      <h3>새 문항 작성</h3>
+      <p class="small">질문과 정답만 쓰면 됩니다. 개념은 나중에 자동으로 연결합니다. 시험에 나올 법한 질문을 직접 쓰세요. 교수님 공개 질문을 베끼지 않습니다. 정답은 1~2문장, 30어절 이내.</p>
+      <div class="label">개념 (선택: 비워 두면 나중에 자동으로 연결)</div>
+      <select id="h-concept" class="full"></select>
+      <div class="label">질문</div>
+      <input type="text" id="h-q" placeholder="예: ~의 역할은?">
+      <div class="label">정답 <span class="small count" id="h-count"></span></div>
+      <textarea id="h-a"></textarea>
+      <div class="label">핵심 요소 (| 로 구분, 선택)</div>
+      <input type="text" id="h-k" placeholder="요소1 | 요소2">
+      <div class="label">메모 (선택)</div>
+      <input type="text" id="h-n">
+      <div class="actions"><button class="b-accept" id="h-add">추가 (Ctrl+Enter)</button></div>
+    </div>
+    <div>
+      <h3>작성한 문항 <span class="small" id="h-total"></span></h3>
+      <div id="h-list"></div>
+    </div>
+  </div>
+</div>
+
+<main id="recheck" style="display:none">
+  <aside><div class="filters small" id="rc-summary" style="padding:10px"></div><div id="rc-list"></div></aside>
+  <section class="card" id="rc-card"></section>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let items = [], decisions = {}, cur = 0, visible = [];
+const TYPE_KO = {definition:"정의", purpose:"목적·이유", mechanism:"원리", comparison:"비교",
+  limitation:"한계", consequence:"결과", judgment:"판단"};
+const FORM_KO = {ko:"한국어 용어", en:"영어 용어", abbr:"약어", mixed:"혼합"};
+const FLAG_KO = {term_form:"용어 표기 불일치 의심", not_duplicate:"비슷한 문항 있음", no_leak:"정답 노출 의심",
+  ref_words:"정답 길이 초과", ref_sentences:"문장 수 초과", schema:"형식 오류", slot_match:"슬롯 불일치",
+  korean:"한국어 아님", key_points:"핵심 요소 개수", unique_id:"ID 중복"};
+
+function esc(s) { return String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("on"); setTimeout(() => t.classList.remove("on"), 1400); }
+function words(s) { return s.trim() ? s.trim().split(/\s+/).length : 0; }
+function sentences(s) {
+  let n = 0; for (const line of s.trim().split(/\n/)) for (const seg of line.split(/(?<=[.!?。])(?=\s|$)/)) if (seg.trim()) n++;
+  return n;
+}
+function countLabel(s) {
+  const w = words(s), n = sentences(s), ok = w > 0 && w <= 30 && n >= 1 && n <= 2;
+  return {text: `${w}어절 · ${n}문장`, ok};
+}
+
+async function load() {
+  const r = await fetch("/api/items"); const d = await r.json();
+  items = d.items; decisions = d.decisions; render();
+}
+
+function flagged(it) { return it.auto_flags.length || it.writer_notes; }
+function applyFilters() {
+  const st = $("f-status").value, sp = $("f-split").value;
+  visible = items.map((it, i) => i).filter(i => {
+    const it = items[i], dec = decisions[it.item_id];
+    if (sp !== "all" && it.split !== sp) return false;
+    if (st === "undecided") return !dec;
+    if (st === "decided") return !!dec;
+    if (st === "flagged") return flagged(it);
+    return true;
+  });
+}
+
+function render() {
+  applyFilters();
+  const n = Object.keys(decisions).length;
+  $("bar").style.width = (100 * n / items.length) + "%";
+  const c = {accept:0, edit:0, reject:0}; Object.values(decisions).forEach(d => c[d.decision]++);
+  $("progress-text").textContent = `${n} / ${items.length} 결정 · 수용 ${c.accept} · 수정 ${c.edit} · 거절 ${c.reject}`;
+  $("list").innerHTML = visible.map(i => {
+    const it = items[i], dec = decisions[it.item_id];
+    return `<div class="row ${i === cur ? "cur" : ""}" data-i="${i}"><span class="dot ${dec ? dec.decision : ""}"></span>
+      <div><div class="small">${esc(it.item_id)} · ${esc(it.concept)}</div><div class="q">${esc(it.question_ko)}</div>
+      ${flagged(it) ? '<div class="flag">● 확인 필요</div>' : ""}</div></div>`;
+  }).join("") || '<div class="row small">해당 문항이 없습니다.</div>';
+  document.querySelectorAll(".row[data-i]").forEach(el => el.onclick = () => { cur = +el.dataset.i; render(); });
+  renderCard();
+}
+
+function renderCard() {
+  const it = items[cur]; if (!it) { $("card").innerHTML = ""; return; }
+  const dec = decisions[it.item_id] || {};
+  const sib = it.variant_group ? items.filter(x => x.variant_group === it.variant_group && x.item_id !== it.item_id) : [];
+  const flags = it.auto_flags.map(f => FLAG_KO[f] || f);
+  $("card").innerHTML = `
+    <div class="meta">
+      <span class="badge">${esc(it.item_id)}</span><span class="badge">${esc(it.split)}</span>
+      <span class="badge">${esc(it.domain.slice(0,3))}</span>
+      <span class="badge">${esc(it.concept)}${it.concept_ko ? " / " + esc(it.concept_ko) : ""}</span>
+      <span class="badge">${TYPE_KO[it.question_type] || it.question_type}</span>
+      <span class="badge">${FORM_KO[it.term_form] || it.term_form}</span>
+      ${it.variant_group ? `<span class="badge">변형 묶음 ${esc(it.variant_group)}</span>` : ""}
+    </div>
+    <div class="label">질문</div><div class="question">${esc(it.question_ko)}</div>
+    <div class="label">정답 <span class="small">${it.answer_check.words}어절 · ${it.answer_check.sentences}문장</span></div>
+    <div class="answer">${esc(it.reference_answer_ko)}</div>
+    <div class="label">핵심 요소</div><div>${it.key_points_ko.map(esc).join(" · ") || "-"}</div>
+    ${it.required_terms.length ? `<div class="label">영어로 유지할 용어</div><div>${it.required_terms.map(esc).join(", ")}</div>` : ""}
+    ${flags.length || it.writer_notes ? `<div class="warn">${flags.length ? "<b>자동 경고:</b> " + flags.join(", ") + "<br>" : ""}
+      ${it.writer_notes ? "<b>작성자 메모:</b> " + esc(it.writer_notes) : ""}</div>` : ""}
+    ${sib.length ? `<div class="label">같은 변형 묶음 (표기만 달라야 함)</div><div class="siblings">${sib.map(s =>
+      `<div>[${FORM_KO[s.term_form]}] ${esc(s.question_ko)}</div>`).join("")}</div>` : ""}
+    <div class="actions">
+      <button class="b-accept ${dec.decision === "accept" ? "sel" : ""}" id="b-accept">수용 (A)</button>
+      <button class="b-edit ${dec.decision === "edit" ? "sel" : ""}" id="b-edit">수정 (E)</button>
+      <button class="b-reject ${dec.decision === "reject" ? "sel" : ""}" id="b-reject">거절 (R)</button>
+      ${dec.decision ? '<button id="b-undo">결정 취소 (U)</button>' : ""}
+    </div>
+    <div id="editbox" style="display:${dec.decision === "edit" ? "block" : "none"}">
+      <div class="label">수정한 질문 (바꾸지 않으려면 그대로)</div>
+      <textarea id="e-q">${esc(dec.edited_question || it.question_ko)}</textarea>
+      <div class="label">수정한 정답 <span class="small count" id="e-count"></span></div>
+      <textarea id="e-a">${esc(dec.edited_answer || it.reference_answer_ko)}</textarea>
+      <div class="actions"><button class="b-edit" id="b-save">수정 저장 (Ctrl+Enter)</button></div>
+    </div>
+    <div class="label">메모 (수정·거절 이유)</div>
+    <input type="text" id="note" value="${esc(dec.note || "")}" placeholder="선택">
+    <div class="keys small"><kbd>J</kbd>/<kbd>K</kbd> 다음/이전 · <kbd>A</kbd> 수용 · <kbd>E</kbd> 수정 · <kbd>R</kbd> 거절 · <kbd>U</kbd> 취소</div>`;
+  $("b-accept").onclick = () => decide("accept");
+  $("b-reject").onclick = () => decide("reject");
+  $("b-edit").onclick = openEdit;
+  if ($("b-undo")) $("b-undo").onclick = () => decide(null);
+  $("b-save").onclick = saveEdit;
+  const upd = () => { const c = countLabel($("e-a").value); $("e-count").textContent = c.text; $("e-count").classList.toggle("bad", !c.ok); };
+  $("e-a").oninput = upd; upd();
+}
+
+function openEdit() { $("editbox").style.display = "block"; $("e-a").focus(); }
+
+async function post(url, body) {
+  const r = await fetch(url, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+  const d = await r.json(); if (!r.ok) { toast("저장 실패: " + (d.error || r.status)); throw new Error(d.error); } return d;
+}
+
+async function decide(decision, extra = {}) {
+  const it = items[cur]; const note = $("note") ? $("note").value : "";
+  await post("/api/decision", {item_id: it.item_id, decision, note, ...extra});
+  if (decision === null) delete decisions[it.item_id];
+  else decisions[it.item_id] = {decision, note, ...extra};
+  toast(decision ? {accept:"수용", edit:"수정 저장", reject:"거절"}[decision] : "결정 취소");
+  if (decision && decision !== "edit") nextUndecided(); else render();
+}
+
+async function saveEdit() {
+  const it = items[cur], q = $("e-q").value.trim(), a = $("e-a").value.trim();
+  const edited_question = q !== it.question_ko ? q : "", edited_answer = a !== it.reference_answer_ko ? a : "";
+  if (!edited_question && !edited_answer) { toast("바뀐 내용이 없습니다"); return; }
+  const c = countLabel(a); if (!c.ok && !confirm(`정답이 ${c.text}입니다. 그래도 저장할까요?`)) return;
+  await decide("edit", {edited_question, edited_answer});
+  nextUndecided();
+}
+
+function nextUndecided() {
+  applyFilters();
+  const pos = visible.indexOf(cur);
+  const after = visible.slice(pos + 1).concat(visible.slice(0, Math.max(pos, 0)));
+  const nxt = after.find(i => !decisions[items[i].item_id]);
+  if (nxt !== undefined) cur = nxt; else if (visible.length) cur = visible[Math.min(pos + 1, visible.length - 1)] ?? cur;
+  render();
+}
+
+function move(d) {
+  applyFilters(); if (!visible.length) return;
+  let pos = visible.indexOf(cur); pos = pos < 0 ? 0 : Math.min(Math.max(pos + d, 0), visible.length - 1);
+  cur = visible[pos]; render();
+  document.querySelector(".row.cur")?.scrollIntoView({block: "nearest"});
+}
+
+document.addEventListener("keydown", (e) => {
+  const typing = ["TEXTAREA", "INPUT", "SELECT"].includes(document.activeElement.tagName);
+  if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+    if ($("human").style.display === "block") addHuman(); else if ($("editbox")?.style.display === "block") saveEdit();
+    e.preventDefault(); return;
+  }
+  if (typing || $("human").style.display === "block" || $("recheck").style.display !== "none") return;
+  const k = e.key.toLowerCase();
+  if (k === "j") move(1); else if (k === "k") move(-1);
+  else if (k === "a") decide("accept"); else if (k === "r") decide("reject");
+  else if (k === "e") { openEdit(); e.preventDefault(); } else if (k === "u") decide(null);
+});
+$("f-status").onchange = () => { applyFilters(); if (visible.length && !visible.includes(cur)) cur = visible[0]; render(); };
+$("f-split").onchange = $("f-status").onchange;
+
+// ---- human-written items ----
+let concepts = [], human = [];
+async function loadHuman() {
+  const d = await (await fetch("/api/human")).json(); concepts = d.concepts; human = d.human;
+  $("h-concept").innerHTML = '<option value="">(자동 연결)</option>' + concepts.map(c =>
+    `<option value="${esc(c.concept_id)}">${esc(c.domain.slice(0,3))} · ${esc(c.concept)}${c.concept_ko ? " / " + esc(c.concept_ko) : ""}</option>`).join("");
+  renderHuman();
+}
+function renderHuman() {
+  $("h-total").textContent = `${human.length}개 (목표 30~50)`;
+  const name = Object.fromEntries(concepts.map(c => [c.concept_id, c.concept]));
+  $("h-list").innerHTML = human.slice().reverse().map(h => `<div class="hitem"><button data-id="${h.id}" title="삭제">삭제</button>
+    <div class="small">${esc(h.concept_id ? (name[h.concept_id] || h.concept_id) : "개념 자동 연결 예정")}</div><b>${esc(h.question_ko)}</b><div>${esc(h.reference_answer_ko)}</div></div>`).join("");
+  document.querySelectorAll(".hitem button").forEach(b => b.onclick = async () => {
+    if (!confirm("이 문항을 삭제할까요?")) return;
+    human = (await post("/api/human", {action: "delete", id: +b.dataset.id})).human; renderHuman();
+  });
+}
+async function addHuman() {
+  const body = {action: "add", concept_id: $("h-concept").value, question_ko: $("h-q").value,
+    reference_answer_ko: $("h-a").value, key_points: $("h-k").value, note: $("h-n").value};
+  const c = countLabel(body.reference_answer_ko);
+  if (!c.ok && !confirm(`정답이 ${c.text}입니다. 그래도 추가할까요?`)) return;
+  human = (await post("/api/human", body)).human;
+  ["h-q", "h-a", "h-k", "h-n"].forEach(id => $(id).value = ""); $("h-count").textContent = "";
+  renderHuman(); toast("추가했습니다"); $("h-q").focus();
+}
+$("h-add").onclick = addHuman;
+$("h-a").oninput = () => { const c = countLabel($("h-a").value); $("h-count").textContent = c.text; $("h-count").classList.toggle("bad", !c.ok); };
+function showTab(name) {
+  $("review").style.display = name === "review" ? "" : "none";
+  $("human").style.display = name === "human" ? "block" : "none";
+  $("recheck").style.display = name === "recheck" ? "" : "none";
+  ["review", "human", "recheck"].forEach(t => $("tab-" + t).classList.toggle("on", t === name));
+  if (name === "human") loadHuman();
+  if (name === "recheck") loadRecheck();
+}
+$("tab-review").onclick = () => showTab("review");
+$("tab-human").onclick = () => showTab("human");
+$("tab-recheck").onclick = () => showTab("recheck");
+
+// ---- recheck (cross-model answerability flags) ----
+let rcItems = [], rcDec = {}, rcCur = 0;
+const CAT_KO = {error: "오류", ambiguous_fix: "모호함", precision_fix: "표현 정밀도"};
+const ACT_KO = {apply: "수정안 적용", keep: "원래대로", edit: "직접 수정", reject: "거절"};
+async function loadRecheck() {
+  const d = await (await fetch("/api/recheck")).json(); rcItems = d.items; rcDec = d.decisions; renderRecheck();
+}
+function renderRecheck() {
+  const n = rcItems.filter(i => rcDec[i.item_id]).length;
+  const cats = {}; rcItems.forEach(i => cats[i.category] = (cats[i.category] || 0) + 1);
+  $("rc-summary").innerHTML = rcItems.length ? `${n} / ${rcItems.length} 결정 · ` +
+    Object.entries(cats).map(([k, v]) => `${CAT_KO[k] || k} ${v}`).join(" · ") : "재확인할 문항이 아직 없습니다.";
+  $("rc-list").innerHTML = rcItems.map((it, i) => { const d = rcDec[it.item_id];
+    return `<div class="row ${i === rcCur ? "cur" : ""}" data-i="${i}"><span class="dot ${d ? ({apply:"accept",keep:"accept",edit:"edit",reject:"reject"}[d.action]) : ""}"></span>
+      <div><div class="small">${esc(it.item_id)} · ${CAT_KO[it.category] || it.category}</div><div class="q">${esc(it.question_ko)}</div></div></div>`; }).join("");
+  document.querySelectorAll("#rc-list .row").forEach(el => el.onclick = () => { rcCur = +el.dataset.i; renderRecheck(); });
+  const it = rcItems[rcCur]; if (!it) { $("rc-card").innerHTML = ""; return; }
+  const d = rcDec[it.item_id] || {};
+  const sq = it.suggested_question_ko, sa = it.suggested_answer_ko;
+  $("rc-card").innerHTML = `
+    <div class="meta"><span class="badge">${esc(it.item_id)}</span><span class="badge">${esc(it.split)}</span>
+      <span class="badge">${CAT_KO[it.category] || it.category}</span><span class="badge">${TYPE_KO[it.question_type] || it.question_type}</span>
+      ${d.action ? `<span class="badge">결정: ${ACT_KO[d.action]}</span>` : ""}</div>
+    <div class="warn"><b>Codex 지적:</b> ${esc(it.codex_issue)}<br><b>판정 이유(Claude):</b> ${esc(it.reason)}</div>
+    <div class="label">현재 질문</div><div class="question">${esc(it.question_ko)}</div>
+    ${sq ? `<div class="label">수정안 질문</div><div class="question" style="color:var(--edit)">${esc(sq)}</div>` : ""}
+    <div class="label">현재 정답</div><div class="answer">${esc(it.reference_answer_ko)}</div>
+    ${sa ? `<div class="label">수정안 정답 <span class="small">${countLabel(sa).text}</span></div><div class="answer" style="border-color:var(--edit)">${esc(sa)}</div>` : ""}
+    <div class="actions">
+      ${sq || sa ? '<button class="b-accept" id="rc-apply">수정안 적용 (Y)</button>' : ""}
+      <button id="rc-keep">원래대로 (N)</button>
+      <button class="b-edit" id="rc-editbtn">직접 수정</button>
+      <button class="b-reject" id="rc-reject">거절 (X)</button>
+      ${d.action ? '<button id="rc-undo">결정 취소</button>' : ""}
+    </div>
+    <div id="rc-editbox" style="display:${d.action === "edit" ? "block" : "none"}">
+      <div class="label">질문</div><textarea id="rc-q">${esc(d.edited_question || sq || it.question_ko)}</textarea>
+      <div class="label">정답 <span class="small count" id="rc-count"></span></div><textarea id="rc-a">${esc(d.edited_answer || sa || it.reference_answer_ko)}</textarea>
+      <div class="actions"><button class="b-edit" id="rc-save">저장</button></div>
+    </div>
+    <div class="label">메모</div><input type="text" id="rc-note" value="${esc(d.note || "")}" placeholder="선택">
+    <div class="keys small"><kbd>Y</kbd> 수정안 적용 · <kbd>N</kbd> 원래대로 · <kbd>X</kbd> 거절 · <kbd>J</kbd>/<kbd>K</kbd> 다음/이전</div>`;
+  if ($("rc-apply")) $("rc-apply").onclick = () => rcDecide("apply");
+  $("rc-keep").onclick = () => rcDecide("keep");
+  $("rc-reject").onclick = () => rcDecide("reject");
+  if ($("rc-undo")) $("rc-undo").onclick = () => rcDecide(null);
+  $("rc-editbtn").onclick = () => { $("rc-editbox").style.display = "block"; $("rc-a").focus(); };
+  const upd = () => { const c = countLabel($("rc-a").value); $("rc-count").textContent = c.text; $("rc-count").classList.toggle("bad", !c.ok); };
+  $("rc-a").oninput = upd; upd();
+  $("rc-save").onclick = () => {
+    const q = $("rc-q").value.trim(), a = $("rc-a").value.trim();
+    rcDecide("edit", {edited_question: q !== it.question_ko ? q : "", edited_answer: a !== it.reference_answer_ko ? a : ""});
+  };
+}
+async function rcDecide(action, extra = {}) {
+  const it = rcItems[rcCur]; if (!it) return;
+  await post("/api/recheck", {item_id: it.item_id, action, note: $("rc-note")?.value || "", ...extra});
+  if (action === null) delete rcDec[it.item_id]; else rcDec[it.item_id] = {action, ...extra};
+  toast(action ? ACT_KO[action] : "결정 취소");
+  if (action && action !== "edit") { const nxt = rcItems.findIndex((x, i) => i > rcCur && !rcDec[x.item_id]); if (nxt >= 0) rcCur = nxt; }
+  renderRecheck();
+}
+document.addEventListener("keydown", (e) => {
+  if ($("recheck").style.display === "none") return;
+  if (["TEXTAREA", "INPUT"].includes(document.activeElement.tagName)) return;
+  const k = e.key.toLowerCase();
+  if (k === "y" && $("rc-apply")) rcDecide("apply"); else if (k === "n") rcDecide("keep");
+  else if (k === "x") rcDecide("reject");
+  else if (k === "j") { rcCur = Math.min(rcCur + 1, rcItems.length - 1); renderRecheck(); }
+  else if (k === "k") { rcCur = Math.max(rcCur - 1, 0); renderRecheck(); }
+});
+
+load();
+</script>
+</body>
+</html>

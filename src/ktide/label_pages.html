@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>K-TIDE 페이지 검토</title>
+<style>
+  :root { font: 16px system-ui, sans-serif; color: #162538; background: #edf1f6; }
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  header { position: sticky; top: 0; z-index: 1; background: white; border-bottom: 1px solid #cbd5e1; }
+  .wrap { max-width: 1120px; margin: auto; padding: 12px 20px; }
+  .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  h1 { margin: 0 auto 0 0; font-size: 1.15rem; }
+  label, #position, #summary, #notice { font-size: .875rem; }
+  select, button { font: inherit; color: inherit; padding: 7px 10px; border-radius: 6px; border: 1px solid #9baec0; background: white; }
+  select { max-width: min(100%, 360px); }
+  button:not(:disabled) { cursor: pointer; }
+  button:disabled { opacity: .5; }
+  button:focus-visible, select:focus-visible { outline: 3px solid #2476bd; outline-offset: 2px; }
+  #exclude { color: white; background: #9c2634; border-color: #9c2634; }
+  #keep { color: white; background: #16604e; border-color: #16604e; }
+  #title { overflow-wrap: anywhere; margin: 0 0 8px; font-size: 1rem; }
+  #notice { min-height: 1.4em; margin: 5px 0 0; }
+  #question { margin: 4px 0 8px; color: #34465b; }
+  #viewer { display: grid; justify-items: center; }
+  #preview { max-width: 100%; max-height: calc(100dvh - 215px); object-fit: contain; background: white; box-shadow: 0 6px 28px #21344a20; cursor: zoom-in; }
+  #preview.zoom { max-height: none; cursor: zoom-out; }
+  kbd { font: inherit; font-size: .8em; padding: 0 .25em; border: 1px solid currentColor; border-radius: 3px; }
+  @media (max-width: 650px) { #preview { max-height: calc(100dvh - 315px); } }
+</style>
+<header>
+  <div class="wrap">
+    <div class="row"><h1>K-TIDE 페이지 검토</h1><span id="summary"></span></div>
+    <div class="row" style="margin-top:10px">
+      <label for="scope">대상</label>
+      <select id="scope"><option value="final">최종 검수</option><option value="human">판단이 필요한 페이지만</option><option value="">전체 페이지</option><option>우선 시각 검토</option><option>후순위 시각 검토</option><option>표본 판독 완료</option><option>자동 선별 신호 없음</option></select>
+      <label for="file">PDF</label><select id="file"><option value="">전체 PDF</option></select>
+      <label for="filter">라벨</label>
+      <select id="filter"><option value="pending">미분류</option><option value="all">전체</option><option value="exclude">제외</option><option value="keep">유지</option></select>
+    </div>
+  </div>
+</header>
+<main class="wrap">
+  <h2 id="title">페이지 불러오는 중</h2>
+  <p id="question" hidden></p>
+  <div class="row">
+    <button id="prev">이전 <kbd>←</kbd></button>
+    <button id="next">다음 <kbd>→</kbd></button>
+    <button id="exclude">제외 <kbd>X</kbd></button>
+    <button id="keep">유지 <kbd>K</kbd></button>
+    <button id="reset">라벨 지우기 <kbd>U</kbd></button>
+    <span id="position"></span>
+  </div>
+  <p id="notice" role="status"></p>
+  <div id="viewer"><img id="preview" hidden alt="강의 PDF 페이지" tabindex="0"></div>
+</main>
+<script>
+const el = id => document.getElementById(id);
+const names = { exclude: '제외', keep: '유지' };
+const filters = ['scope', 'file', 'filter'];
+let pages = [], queue = [], index = 0, saving = false;
+const current = () => queue[index];
+
+function render() {
+  const page = current();
+  const excluded = pages.filter(item => item.label === 'exclude').length;
+  const kept = pages.filter(item => item.label === 'keep').length;
+  const review = pages.filter(item => el('scope').value === 'final' ? item.final_review : item.review_question);
+  const remaining = review.filter(item => !item.label).length;
+  el('summary').textContent = ['human', 'final'].includes(el('scope').value)
+    ? `판단 요청 ${review.length}쪽 · ${remaining}쪽 남음`
+    : `전체 ${pages.length} · 제외 ${excluded} · 유지 ${kept}`;
+  el('title').textContent = page
+    ? `${page.source.file.split('/').at(-1)} · ${page.source.page}쪽`
+    : '표시할 페이지가 없습니다';
+  el('question').textContent = (el('scope').value === 'final' ? page?.final_review : page?.review_question) || '';
+  el('question').hidden = !el('question').textContent;
+  el('position').textContent = page
+    ? `${index + 1} / ${queue.length} · ${page.status} · ${names[page.label] || '미분류'}`
+    : '';
+  el('prev').disabled = saving || index === 0;
+  el('next').disabled = saving || index >= queue.length - 1;
+  for (const id of ['exclude', 'keep', 'reset']) {
+    el(id).disabled = saving || !page || (id === 'reset' && !page.label);
+  }
+  for (const id of filters) el(id).disabled = saving;
+  const img = el('preview');
+  img.hidden = !page;
+  if (!page) {
+    img.removeAttribute('src');
+  } else if (img.getAttribute('src') !== `/page/${page.id}`) {
+    img.classList.remove('zoom');
+    img.src = `/page/${page.id}`;
+  }
+}
+
+function rebuild(advance = false) {
+  const previous = current();
+  const scope = el('scope').value, file = el('file').value, filter = el('filter').value;
+  queue = pages.filter(page =>
+    (!scope || (scope === 'final' ? page.final_review : scope === 'human' ? page.review_question : page.status === scope)) &&
+    (!file || page.source.file === file) &&
+    (filter === 'all' || (filter === 'pending' ? !page.label : page.label === filter))
+  );
+  const same = queue.indexOf(previous);
+  if (advance && previous) {
+    const next = queue.findIndex(page => Number(page.id) > Number(previous.id));
+    index = next < 0 ? 0 : next;
+  } else {
+    index = Math.max(0, same);
+  }
+  render();
+}
+
+async function setLabel(label) {
+  const page = current();
+  if (!page || saving || (label === null && !page.label)) return;
+  saving = true;
+  el('notice').textContent = '저장 중';
+  render();
+  try {
+    const response = await fetch('/api/label', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: page.id, label }),
+    });
+    if (!response.ok) throw Error(response.status);
+    page.label = label;
+    el('notice').textContent = `${page.source.page}쪽 · ${label ? names[label] + ' 저장됨' : '라벨 지워짐'}`;
+    rebuild(label !== null);
+  } catch {
+    el('notice').textContent = '저장 실패 · 같은 페이지에서 다시 시도하세요';
+  } finally {
+    saving = false;
+    render();
+  }
+}
+
+function move(step) {
+  if (saving || index + step < 0 || index + step >= queue.length) return;
+  index += step;
+  el('notice').textContent = '';
+  render();
+}
+el('prev').onclick = () => move(-1);
+el('next').onclick = () => move(1);
+el('exclude').onclick = () => setLabel('exclude');
+el('keep').onclick = () => setLabel('keep');
+el('reset').onclick = () => setLabel(null);
+el('preview').onclick = () => el('preview').classList.toggle('zoom');
+el('preview').onkeydown = event => {
+  if (event.key === 'Enter') el('preview').click();
+};
+el('preview').onerror = () => {
+  if (current()) el('notice').textContent = '미리보기 실패 · 페이지 이동 후 다시 시도하세요';
+};
+for (const id of filters) el(id).onchange = () => {
+  el('notice').textContent = '';
+  rebuild();
+};
+document.addEventListener('keydown', event => {
+  if (event.repeat || event.ctrlKey || event.metaKey || event.altKey ||
+      event.target.matches('select, input, textarea, [contenteditable]')) return;
+  const actions = { ArrowLeft: 'prev', ArrowRight: 'next', x: 'exclude', k: 'keep', u: 'reset' };
+  const action = actions[event.key] || actions[event.key.toLowerCase()];
+  if (action) {
+    event.preventDefault();
+    el(action).click();
+  }
+});
+(async () => {
+  try {
+    const response = await fetch('/api/pages');
+    if (!response.ok) throw Error(response.status);
+    pages = await response.json();
+    for (const file of new Set(pages.map(page => page.source.file))) {
+      el('file').add(new Option(file.split('/').at(-1).normalize('NFC'), file));
+    }
+    rebuild();
+  } catch {
+    el('title').textContent = '페이지 목록을 불러오지 못했습니다. 서버를 확인하고 새로고침하세요.';
+  }
+})();
+</script>
+</html>

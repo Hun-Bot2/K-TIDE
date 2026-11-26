@@ -1,0 +1,74 @@
+% Experimental setup — draft. Do not mention the course assignment or its grading.
+% Inference conditions are fixed by design; implementation in src/ktide/.
+\section{Experimental Setup}
+\label{sec:setup}
+
+\subsection{Model and inference conditions}
+\label{sec:setup-inference}
+
+All models start from \texttt{Qwen2.5-1.5B-Instruct} \todo{cite Qwen2.5 technical report after verification}, and the architecture is unchanged.
+Inference conditions are fixed for every model: FP16 on a CUDA GPU, SDPA attention, greedy decoding (no sampling, one beam), at most 128 new tokens, batch size 4 with left padding, and one fixed Korean system prompt that states the answer constraints.
+The system prompt is never tuned per model.
+Every evaluated model is a full, non-quantized checkpoint with the original tokenizer and chat template.
+Before each evaluation, we compute the effective generation configuration to confirm greedy decoding (Appendix~\ref{app:genconfig}).
+
+\subsection{Models compared}
+\label{sec:setup-design}
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lll}
+\toprule
+ & Translated terms & Preserved English terms \\
+\midrule
+Lecture-only & M1 & M2 \\
+Enriched (CKU) & M3 & M4 \\
+\bottomrule
+\end{tabular}
+\caption{The $2\times2$ design. M0 is the base model without fine-tuning.}
+\label{tab:design}
+\end{table}
+
+The main study is a $2\times2$ factorial design (Table~\ref{tab:design}) plus the base model M0.
+Comparing M1 with M2 and M3 with M4 isolates terminology preservation (RQ2).
+Comparing M1 with M3 and M2 with M4 isolates knowledge enrichment (RQ1), and the four cells together estimate their interaction.
+All four fine-tuned models share the teacher model, concept coverage, question-type distribution, number of training examples, LoRA configuration and number of optimizer steps \pending{exact values}.
+\pending{Seeds per condition; any condition that could not be controlled.}
+\todo{Optional if time allows: full fine-tuning vs.\ LoRA on the best cell; one additional small model from another family.}
+
+\subsection{Evaluation sets}
+\label{sec:setup-data}
+
+\pending{Independent evaluation set built and frozen before any training data is generated: size; stratification by domain $\times$ question type $\times$ term surface form (Korean term, English term, acronym); development/held-out split; a seen-concept paraphrase subset and an unseen-concept subset to distinguish memorization from generalization; the rule that held-out items never enter teacher prompts.}
+
+\subsection{Metrics}
+\label{sec:setup-metrics}
+
+\paragraph{Rubric-based LLM judge.}
+Each answer is scored on accuracy, relevance and constraint compliance (1--5 each) from the question and answer alone.
+The judge is \texttt{gpt-6.2-sol} with medium reasoning effort, run through the Codex CLI in an empty working directory with no project context.
+All answers of a run are judged in one call; averages are recomputed from the sub-scores, and the raw judge output is kept.
+Answers are anonymized, so the judge never sees the model name or training condition.
+
+\paragraph{Judge variance and human agreement.}
+In a pilot, judging the same answers twice changed at least one sub-score for most items.
+We therefore judge each run several times and report the mean and standard deviation \pending{number of repetitions}.
+We also measure agreement with human ratings on a subset \pending{size and agreement statistic}.
+
+\paragraph{Rule-based metrics.}
+Computed in Python without an LLM:
+word-limit compliance (at most 30 whitespace-separated words),
+sentence-limit compliance (one or two sentences, with a documented splitting rule),
+empty answers, answers that hit the token limit,
+and unintended script mixing (e.g., Chinese characters).
+
+\paragraph{Reference-based and terminology metrics.}
+\pending{Reference-based semantic accuracy against verified CKU reference answers; required-concept coverage;
+terminology preservation rate (TPR) and acronym expansion accuracy (AEA), which we define for this study and do not claim as standard metrics; hallucination rate.}
+
+\paragraph{Uncertainty.}
+\pending{Paired bootstrap confidence intervals over evaluation items for every main comparison; interaction test for the $2\times2$ design.}
+
+\subsection{Compute}
+\pending{Hardware, run time, and cost per configuration.}

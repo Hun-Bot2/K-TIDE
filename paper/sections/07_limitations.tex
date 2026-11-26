@@ -1,0 +1,22 @@
+% Limitations — skeleton. Does not count toward the page limit.
+\section*{Limitations}
+
+\paragraph{Single domain, single model.}
+The study covers the material of one course and one 1.5B base model, so the findings may not transfer to other domains, languages, or model sizes.
+
+\paragraph{LLM-judge evaluation.}
+Our main metric is a rubric-based LLM judge without reference answers.
+LLM judges are noisy, and in a pilot, re-judging identical answers changed sub-scores for most items.
+We mitigate this with repeated judging, reference-based metrics and a human agreement check, but judge bias cannot be ruled out.
+
+\paragraph{Teacher-written knowledge.}
+Canonical knowledge units rely partly on the teacher model's own knowledge.
+Cross-model verification and manual review reduce errors but cannot rule them out.
+\todo{State whether the writer and the judge belonging to the same model family was mitigated.}
+
+\paragraph{Image-only lecture content.}
+Part of the lecture exists only as images; reading it relies on a multimodal model and may contain transcription errors \pending{report the measured error rate}.
+
+\paragraph{Reproducibility.}
+The lecture materials cannot be redistributed, so others cannot rebuild the exact training data.
+\pending{Open replication with permissively licensed materials, if completed.}

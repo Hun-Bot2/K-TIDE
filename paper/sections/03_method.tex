@@ -1,0 +1,125 @@
+% Method — draft. Numbers below come from docs/progress/P2*.md (snapshot 2026-11-25).
+% Re-sync every number with the progress docs before submission.
+\section{Method}
+\label{sec:method}
+
+K-TIDE is a data construction and fine-tuning procedure, not a new architecture.
+Its goal is to adapt a small instruction-tuned model to answer short Korean questions about the content of one university NLP course, under fixed inference conditions (\S\ref{sec:setup}).
+The procedure has four stages: (1) building a deduplicated lecture corpus, (2) deriving a concept inventory from it, (3) writing and cross-verifying canonical knowledge for each concept, and (4) generating question--answer pairs for supervised fine-tuning under each data condition of the study.
+Stages 1--3 are complete at the time of writing; stage 4 is \pending{QA generation and training}.
+
+\subsection{Task definition}
+\label{sec:method-task}
+
+Questions are short Korean questions that may target any concept covered in the course.
+The model must answer in Korean, in one or two sentences of at most 30 whitespace-separated words, with the key content only.
+Answers are scored by a rubric-based LLM judge on accuracy, relevance, and constraint compliance.
+The judge receives only the question and the answer, with no reference answer or lecture material (\S\ref{sec:setup-metrics}).
+The task therefore rewards general academic correctness, while the course defines which concepts can be asked.
+This split shapes our design: lecture materials define \emph{scope}, and correctness may be supplemented from outside the lecture (\S\ref{sec:method-cku}).
+
+A second aspect is terminology.
+Questions mix Korean with English technical terms and acronyms (e.g., SFT, LoRA, Tokenizer).
+We require answers to keep designated English terms in their original form rather than translating or re-expanding them, and we treat acronym misinterpretation as a distinct error type (\S\ref{sec:setup-metrics}).
+
+\subsection{Lecture corpus construction}
+\label{sec:method-corpus}
+
+The course materials consist of 34 PDF files (33 unique by SHA-256) with 1{,}518 pages in total.
+Fifteen files are predominantly English, eighteen mix Korean and English, and one could not be classified from its text layer.
+A text layer could be extracted from 95.8\% of the pages; the remainder are image-only slides.
+
+Slide decks contain heavy redundancy: copies and partial revisions of the same lecture, repeated slides within a deck, and figures reused across decks.
+We therefore filter at the page level, never deleting source files, so that every decision is reversible.
+Page pairs are compared by character n-gram similarity of their normalized text, or by a perceptual hash of the rendered page when little text is available.
+For each group of near-identical pages a single representative is kept, preferring the most complete version; pages that differ in any explanatory content are all kept.
+Pages without conceptual content (dividers, repeated slides) are excluded, and uncertain cases are routed to manual review rather than excluded.
+
+In the current snapshot, 1{,}086 of 1{,}518 pages are retained.
+Of the 432 excluded pages, 210 are near-duplicates of a retained page, 202 were excluded by manual review, 17 repeat an earlier slide, and 3 are section dividers.
+File-level comparison found one identical pair and 14 partially overlapping pairs.
+Reused figures form 50 groups, so each figure is read once.
+\pending{192 near-duplicate candidates still await manual review; update the counts afterwards.}
+
+\subsection{Concept inventory}
+\label{sec:method-concepts}
+
+A predefined keyword list misses concepts that the course covers but the list omits.
+An early 41-term list, for example, missed basic course concepts such as stopwords, precision and recall, and data leakage.
+We instead extract concepts bottom-up from the retained pages, merge synonyms and versions across files, and keep page-level provenance for every concept.
+A concept is defined at the granularity of a single short-answer exam question (e.g., Laplace smoothing is a sub-concept of smoothing).
+
+The resulting inventory contains 191 concepts in ten course domains
+(Table~\ref{tab:domains}).
+As a recall check, every term of the earlier keyword list maps to a concept.
+\todo{Add a recall check against an independent concept list (e.g., the course syllabus or a textbook table of contents) if one is available.}
+\pending{Image-only pages (270 pages after filtering) are still being read; new concepts found there will be added.}
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{llr}
+\toprule
+ID & Domain & Concepts \\
+\midrule
+D01 & Preprocessing and tokenization & 30 \\
+D02 & $N$-gram language models & 17 \\
+D03 & Classification and evaluation & 21 \\
+D04 & Neural networks and training & 28 \\
+D05 & Embeddings and retrieval & 25 \\
+D06 & Sequence labeling & 5 \\
+D07 & Attention and Transformer & 15 \\
+D08 & Pretrained models & 9 \\
+D09 & LLM training and use & 26 \\
+D10 & Efficient training and inference & 15 \\
+\midrule
+ & Total & 191 \\
+\bottomrule
+\end{tabular}
+\caption{Concept inventory by course domain (snapshot; see \S\ref{sec:method-concepts}).}
+\label{tab:domains}
+\end{table}
+
+\subsection{Canonical knowledge units with cross-model verification}
+\label{sec:method-cku}
+
+Lecture text alone is an incomplete knowledge source.
+Slides give terse or partial definitions, and much content lives in figures.
+In our first extraction, only about one fifth of the concepts had a definition stated in the text layer.
+Because the judge scores general academic correctness, we supplement the lecture with knowledge written by large teacher models.
+Two rules keep this supplement controlled.
+
+\paragraph{Provenance separation.}
+Evidence extracted from the lecture and knowledge written by a teacher model are stored in separate layers and never merged.
+Each \emph{canonical knowledge unit} (CKU) records, per field, whether it rests on the lecture, on an external reference that was actually consulted, or on the teacher model's own knowledge.
+This separation is what makes the lecture-only versus enriched comparison of RQ1 possible (\S\ref{sec:setup-design}).
+
+\paragraph{Writer--verifier split.}
+A CKU contains a reference short answer (one or two Korean sentences, at most 30 words), a definition, mechanism, purpose, limitations, common misconceptions, contrasting concepts, a formula where relevant, terminology metadata (canonical English term, NLP-domain acronym expansion, aliases), and a note on alignment with the lecture.
+One model writes each CKU and a different model verifies it against the cited lecture pages.
+The writer was \texttt{gpt-6.2-sol} accessed through the Codex CLI, and the verifier was \texttt{claude-opus-5-5}.
+The verifier labels each unit \emph{correct}, \emph{minor issue}, \emph{incorrect}, or \emph{unclear}.
+It scores the reference answer on the course rubric (1--5) and proposes fixes.
+The writer then accepts, partially accepts, or rejects each comment with a stated reason, and disagreements go to manual review.
+
+For the first version of all 191 CKUs, the verifier judged 135 correct, 55 with minor issues, 1 incorrect, and none unclear.
+Reference answers had a mean score of 4.72.
+The writer had labeled every unit as consistent with the lecture, but the verifier recorded a difference from the lecture's framing or scope for 56 concepts.
+It also found two apparent errors in the lecture slides themselves; the CKUs keep the correct form and record the lecture's version separately.
+We read this gap as evidence that single-model self-assessment is unreliable for this purpose.
+\pending{CKU v2 revision and re-verification; report accept/reject counts and the final verdict distribution.}
+
+\subsection{QA generation for the four data conditions}
+\label{sec:method-qa}
+
+\pending{Describe teacher QA generation for the $2\times2$ design.
+Knowledge source: lecture-only QA grounded only on lecture evidence vs.\ enriched QA grounded on CKUs.
+Terminology policy: translated answers vs.\ answers that preserve designated English terms.
+To isolate the terminology factor, the two policies use the \emph{same} question--answer pairs and differ only in how terms are written.
+Also describe question types (definition, mechanism, purpose, comparison, limitation, misconception, application), question surface forms (Korean term, English term, acronym), answer constraints, and quality control (verification, exact and semantic deduplication, length checks, split by concept to prevent leakage).
+Report matched counts per condition.}
+
+\subsection{Fine-tuning}
+\label{sec:method-training}
+
+\pending{Training recipe once fixed: LoRA configuration (and full fine-tuning if run), chat template, loss masking on assistant tokens only (with a token-level masking test), checkpoint selection on the development set, number of seeds, and the merge-and-export procedure, including restoring the original \texttt{generation\_config.json} (Appendix~\ref{app:genconfig}).}
