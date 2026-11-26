@@ -33,6 +33,8 @@ VIEWS = {
 LEGACY_VIEW = "K-TIDE experiments (managed)"  # the first saved view, reused as the controlled view
 FILTER_TAG = "research"
 FILTER_STAGES = ("training", "evaluation")
+# failed/crashed runs stay in the project (never deleted) but are hidden from the views
+FILTER_STATES = ("finished", "running")
 TERM_FORMS = ["ko", "en", "abbr", "mixed"]
 
 
@@ -166,6 +168,7 @@ def runset(phases):
         expr.Tags().isin([FILTER_TAG]),
         expr.Config("stage").isin(list(FILTER_STAGES)),
         expr.Config("study_phase").isin(list(phases)),
+        expr.Metric("State").isin(list(FILTER_STATES)),
     ]
 
 
@@ -175,6 +178,7 @@ def server_filter(phases) -> dict:
         "tags": {"$in": [FILTER_TAG]},
         "config.stage": {"$in": list(FILTER_STAGES)},
         "config.study_phase": {"$in": list(phases)},
+        "state": {"$in": list(FILTER_STATES)},
     }
 
 

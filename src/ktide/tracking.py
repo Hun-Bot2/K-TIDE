@@ -127,7 +127,11 @@ class Receipt:
 
     @property
     def display_name(self) -> str:
-        label = self.source_id.rsplit("colab-t4-", 1)[-1] if "colab-t4-" in self.source_id else ""
+        label = ""
+        for marker in ("colab-t4-", "gpu-"):
+            if marker in self.source_id:
+                label = self.source_id.rsplit(marker, 1)[-1]
+                break
         suffix = f" ({label})" if label else ""
         if self.stage == "training":
             return f"{self.condition} · LoRA training{suffix}"
@@ -533,9 +537,16 @@ def mismatches(remote, receipt: Receipt) -> list[str]:
                 ("summary", receipt.metrics, remote.summary),
             )
             for key, value in expected.items()
-            if actual.get(key) != value
+            if not same(actual.get(key), value)
         ]
     )
+
+
+def same(actual, expected) -> bool:
+    """Nested dicts match when every expected key matches (a live run may carry extra keys)."""
+    if isinstance(expected, dict) and isinstance(actual, dict):
+        return all(same(actual.get(k), v) for k, v in expected.items())
+    return actual == expected
 
 
 def verify(api, path: str, receipt: Receipt) -> None:
