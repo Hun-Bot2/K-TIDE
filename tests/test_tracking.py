@@ -24,7 +24,7 @@ def test_duplicate_sync_and_remote_readback(monkeypatch):
 
     @contextmanager
     def init(*, entity, project, id, resume, config, settings, job_type, group, tags, **kwargs):
-        assert resume == "allow" and project == "ktide"
+        assert resume == "allow" and project == "K-TIDE"
         assert settings.x_disable_meta and settings.disable_code
         yield remote.setdefault(
             f"{entity}/{project}/{id}",
@@ -76,7 +76,7 @@ def test_legacy_receipts_when_local_sources_are_available():
         pytest.skip("legacy data is private")
     rows = collect(root)
     assert len({row.run_id for row in rows}) == len(rows)
-    assert {row.project for row in rows} == {"ktide"}
+    assert {row.project for row in rows} == {"K-TIDE"}
     assert {row.evaluation_phase for row in rows if row.stage == "evaluation"} == {"preliminary"}
     by_name = {row.condition: row for row in rows}
     assert by_name["B0"].tags == ["course"]

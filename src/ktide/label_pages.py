@@ -1,4 +1,5 @@
 """Serve the private lecture page labeler on the local machine."""
+
 import argparse
 import hashlib
 import json
@@ -84,7 +85,9 @@ class Audit:
                 records.pop(identity, None)
             else:
                 records[identity] = {
-                    "source": page["source"], "sha256": page["sha256"], "label": label,
+                    "source": page["source"],
+                    "sha256": page["sha256"],
+                    "label": label,
                 }
             with NamedTemporaryFile(
                 mode="w", encoding="utf-8", dir=self.output.parent, delete=False
@@ -93,7 +96,9 @@ class Audit:
                 try:
                     json.dump(
                         {"schema_version": 1, "labels": [records[k] for k in sorted(records)]},
-                        stream, ensure_ascii=False, indent=2,
+                        stream,
+                        ensure_ascii=False,
+                        indent=2,
                     )
                     stream.write("\n")
                     stream.flush()
@@ -104,9 +109,21 @@ class Audit:
     def image(self, key):
         page = str(self.pages[key]["source"]["page"])
         return subprocess.run(
-            ["pdftoppm", "-f", page, "-l", page, "-scale-to", "1600",
-             "-png", "-singlefile", str(self.paths[key])],
-            check=True, capture_output=True, timeout=20,
+            [
+                "pdftoppm",
+                "-f",
+                page,
+                "-l",
+                page,
+                "-scale-to",
+                "1600",
+                "-png",
+                "-singlefile",
+                str(self.paths[key]),
+            ],
+            check=True,
+            capture_output=True,
+            timeout=20,
         ).stdout
 
 

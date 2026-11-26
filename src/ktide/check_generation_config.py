@@ -21,16 +21,29 @@ import json
 import sys
 from pathlib import Path
 
-KEYS = ("do_sample", "num_beams", "max_new_tokens", "temperature", "top_p", "top_k",
-        "repetition_penalty", "eos_token_id", "pad_token_id")
+KEYS = (
+    "do_sample",
+    "num_beams",
+    "max_new_tokens",
+    "temperature",
+    "top_p",
+    "top_k",
+    "repetition_penalty",
+    "eos_token_id",
+    "pad_token_id",
+)
 
 
 def effective(model, tokenizer, max_new_tokens: int = 128) -> dict:
     from transformers import GenerationConfig
 
     cfg = GenerationConfig(
-        do_sample=False, num_beams=1, max_new_tokens=max_new_tokens, use_cache=True,
-        eos_token_id=tokenizer.eos_token_id, pad_token_id=tokenizer.pad_token_id,
+        do_sample=False,
+        num_beams=1,
+        max_new_tokens=max_new_tokens,
+        use_cache=True,
+        eos_token_id=tokenizer.eos_token_id,
+        pad_token_id=tokenizer.pad_token_id,
     )
     eff, _ = model._prepare_generation_config(cfg)
     return {k: getattr(eff, k, None) for k in KEYS}
@@ -54,8 +67,11 @@ def main(target: str = "Qwen/Qwen2.5-1.5B-Instruct") -> dict:
     original = GenerationConfig.from_pretrained(folder)
     model.generation_config = original
 
-    report = {"model": str(target), "saved_generation_config": original.to_diff_dict(),
-              "as_is": effective(model, tok)}
+    report = {
+        "model": str(target),
+        "saved_generation_config": original.to_diff_dict(),
+        "as_is": effective(model, tok),
+    }
 
     restamped = copy.deepcopy(original)
     restamped.transformers_version = transformers.__version__

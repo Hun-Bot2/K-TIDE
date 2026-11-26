@@ -2,6 +2,7 @@
 
 No professor content is asserted verbatim here, to keep this file safe for the public repo.
 """
+
 import ast
 import inspect
 import json
@@ -26,10 +27,17 @@ def test_constants_match_assignment_requirements():
 def test_answer_questions_is_the_notebook_function_verbatim():
     nb = load_professor_notebook()
     raw = json.loads(nb.path.read_text(encoding="utf-8"))
-    sources = ["".join(c["source"]) if isinstance(c["source"], list) else c["source"]
-               for c in raw["cells"] if c["cell_type"] == "code"]
-    defs = {n.name: ast.dump(n) for s in sources for n in ast.parse(s).body
-            if isinstance(n, ast.FunctionDef)}
+    sources = [
+        "".join(c["source"]) if isinstance(c["source"], list) else c["source"]
+        for c in raw["cells"]
+        if c["cell_type"] == "code"
+    ]
+    defs = {
+        n.name: ast.dump(n)
+        for s in sources
+        for n in ast.parse(s).body
+        if isinstance(n, ast.FunctionDef)
+    }
     fn = inspect.unwrap(nb.fn("answer_questions"))  # strip @torch.inference_mode()
     for name in ("answer_questions", "load_model", "unpack_model"):
         executed = ast.dump(ast.parse(nb.function_sources[name]).body[0])

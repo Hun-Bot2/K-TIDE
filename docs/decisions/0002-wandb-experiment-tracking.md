@@ -10,7 +10,7 @@ P0에서는 저장된 수치만 명시적으로 선택한다. 동일한 run ID�
 
 ## 규격 v2 (2026-11-26: 단일 프로젝트)
 
-모든 연구 실험은 단일 W&B 프로젝트 `ktide`(비공개)에서 관리한다. Course(기말과제)와
+모든 연구 실험은 단일 W&B 프로젝트 `K-TIDE`(비공개, 2026-11-26 `ktide`에서 이름 변경)에서 관리한다. Course(기말과제)와
 Research(학회 논문)는 W&B 안에서 tags, group, job type으로 나누고, Report는 Run Set의 tag 필터로 분리한다.
 이 규격은 W&B 기록에만 적용된다. 저장소의 연구 구조(`report_course/`, `paper/`)와
 로컬 실험 기록(`runs/`, `data_private/`)은 바꾸지 않으며, 이관 코드는 이를 읽기만 한다.
@@ -66,7 +66,7 @@ uv run python -m ktide.tracking --sync --entity <W-and-B-entity>
 ```
 
 첫 명령으로 전송될 집계를 로컬에서 확인한다. 두 번째 명령은 현재 로그인으로
-`ktide` 프로젝트에 집계를 동기화하고 수치, 버전 식별자, tags, group, job type을 다시 읽는다.
+`K-TIDE` 프로젝트에 집계를 동기화하고 수치, 버전 식별자, tags, group, job type을 다시 읽는다.
 계정 인증은 SDK 로그인 또는 환경 변수로 제공한다.
 
 원격 run을 다시 만들어야 할 때(예: 서버에서 지워지지 않는 summary가 남은 경우)는 그 run ID를
@@ -104,3 +104,47 @@ B0가 포함되지 않는다. 규격 v1의 `ktide-course`, `ktide-research` 프�
 예상 config, summary, tags, group, job type과 일치를 확인했고,
 `K-TIDE · Research`, `K-TIDE · Course` Report를 만들어 저장된 Run Set 필터를 다시 읽어 확인했다.
 Report 생성에는 `wandb-workspaces`를 일회성으로만 사용했다(프로젝트 의존성에 추가하지 않음).
+
+## 규격 v3 (2026-11-26: 자동 기록과 코드 기반 Workspace)
+
+- **학습은 실시간 기록한다.** `ktide.train.sft --report-to wandb`가 Trainer보다 먼저 run을 열고 Trainer의
+  W&B callback이 그 run을 이어 쓴다(`train/loss`, `train/learning_rate`, `train/grad_norm`, `eval/loss`,
+  x축 `train/global_step`). GPU 지표는 SDK가 5초 간격으로 수집한다. `WANDB_LOG_MODEL=false`,
+  `WANDB_WATCH=false`, 코드·콘솔·requirements 수집은 끈다. 네트워크 장애 시 offline으로 계속 학습하고,
+  학습이 실패해도 `train_config.json`(status=failed)과 `train_log.json`을 남긴다.
+- **Run ID:** 일반 학습은 노트북이 만든 ID(`--run-id`), Sweep은 agent가 정한 ID를 쓴다. 어느 쪽이든 실제
+  W&B run ID가 출력 폴더(`/content/outputs/<id>`), 답변 run 폴더 이름, HF 결과 경로
+  (`results/<condition>/<data>/<id>.zip`), `train_config.json`의 `wandb_run_id`가 된다.
+- **실험 식별자:** `experiment_id = <condition>/<live run id 또는 run 폴더>`를 학습 run과 평가 run이 함께 갖는다.
+  학습 run(job type `training`)과 평가 run(`evaluation`)은 따로 둔다. 실시간 run이 있으면 사후 이관은 새 run을
+  만들지 않고 그 run에 내보내기 검증 결과만 더한다.
+- **자동 기록 지점:** 결과 Import(`import_colab`), 규칙 기반·LLM Judge 평가(`evalset.score`, 슬라이스별 오류 분석
+  집계 포함), 데이터셋 구축(`train_data.lecture_only_qc`, `knowledge.polish_cku`, `knowledge.slp revise`)이 끝나면
+  `tracking.record()`가 해당 run만 동기화한다. 기록 실패는 파이프라인을 멈추지 않고 재시도 명령을 출력한다
+  (`KTIDE_WANDB=0`으로 끔).
+- **이름:** 개발 중 평가 split은 기록과 시각화에서 `during_development`로 부른다(문항 ID 접두어 `dev-`는 유지).
+  M0 run에 남은 기존 `/dev/` 키는 지우지 않고 관리 패널에서 쓰지 않는다.
+- **Workspace:** `ktide.wandb_workspace`가 자동 생성 패널을 끈 팀 저장 뷰를 코드로 정의하고, URL을
+  `src/ktide/wandb_views.json`에 고정해 같은 뷰를 갱신한다(개인 Workspace는 W&B API가 지원하지 않아 대상이 아니다).
+  run 필터는 동적이다: `tags in [research] and config.stage in [training, evaluation]`. 조건 이름이나 run ID를 쓰지
+  않으므로 M2~M4와 후속 모델의 학습·평가 run은 저장 없이 같은 패널에 나타난다. 데이터 run, B0, 과제 최적화 run,
+  smoke run은 필터에서 빠진다. `--save`는 패널·레이아웃·필터 정책을 바꿀 때만 실행하고, 새 run 반영 확인은 읽기 전용
+  `--check`로 한다. run과 데이터는 지우지 않는다.
+- **번들:** `bundle_manifest.json`(git commit·dirty, 파일별 SHA-256, 학습 데이터 해시, 분리 점검 결과)을 넣고,
+  노트북은 ZIP 해시(`BUNDLE_SHA256`)와 파일 해시가 다르면 멈춘다. 압축은 번들 해시별 폴더에 푼다.
+- **정밀도:** BF16은 compute capability 8.0 이상에서만 쓴다. M1(data-v1, run `5215e607…`)은 실제 실행 조건인
+  BF16(T4 에뮬레이션)으로 기록되어 있으며, 이후 FP16 재학습은 별도 run이다. **연구용 학습은 FP16으로 통일한다**
+  (2026-11-26 결정, 교수님 평가의 FP16 추론과 일치). 노트북이 `--precision fp16`을 명시한다.
+- **Smoke test:** `--track smoke --max-steps N`. 태그 `smoke`, group `smoke`로 두어 Course·Research Report와
+  사후 이관에서 제외한다.
+- **실험 단계(study_phase, 2026-11-26):** M0 = `baseline`, BF16 M1(data-v1) = `pilot`(삭제·덮어쓰기 없이 보존),
+  FP16 연구 run = `controlled`, 과제 최적화 = `optimization`, smoke = `smoke`. 학습 run은 `sft.py`가 실시간으로,
+  사후 이관은 `tracking.study_phase()`가 기록한다. 저장 뷰 두 개가 같은 패널을 쓰고 필터만 다르다:
+  `K-TIDE controlled (FP16)`(baseline+controlled), `K-TIDE pilot (BF16)`(baseline+pilot).
+- **비교 지표:** Knowledge Accuracy(strict accuracy, reference score, judge accuracy)와 Instruction Following
+  (30어절, 1~2문장, 둘 다, judge constraints)을 나눠 보인다. 평가 run마다 M0 대비 변화량(`delta_vs_M0/*`, 같은
+  문항 수일 때만), 문항별 개선·유지·하락 수(`paired_vs_M0/*`), during_development 문항만으로 만든 영역별 히트맵
+  (집계 PNG, `heatmap/*`, 내용 해시가 바뀔 때만 다시 올림)을 기록한다. 이 값들은 차이를 보여 줄 뿐 유의성 검정이나
+  인과 판단이 아니다.
+- **FP16 점검:** 학습 중 gradient scale 변화(감소 = overflow로 건너뛴 step)와 loss·grad norm·eval loss의 NaN/Inf
+  횟수를 `train/grad_scale_*`, `train/nonfinite_steps`로 기록한다(관찰만 하며 학습 동작은 바꾸지 않는다).

@@ -9,8 +9,12 @@ PREDS = [
 
 
 def item(n, a, r, c, avg=None):
-    return {"question_number": n, "scores": {"accuracy": a, "relevance": r, "constraints": c},
-            "total_average": avg, "feedback": "f"}
+    return {
+        "question_number": n,
+        "scores": {"accuracy": a, "relevance": r, "constraints": c},
+        "total_average": avg,
+        "feedback": "f",
+    }
 
 
 def test_extract_from_fenced_text():

@@ -13,6 +13,10 @@ Definitions (documented so the paper can cite them precisely):
                  likely cut off by the token budget rather than by EOS (heuristic, re-tokenization).
 * hangul_ratio — Hangul syllables / all letters (Hangul + Latin + Han). Measures language mix.
 * has_han      — answer contains CJK ideographs (Chinese characters): a language-confusion signal.
+* is_polite    — the answer ends in a polite/formal register ending (~니다, ~요, ~세요, ~죠).
+                 Training answers use the plain register (~이다), so this tracks style transfer.
+* mentions_source — the answer refers to its source material (강의, 슬라이드, 수업, 교재),
+                 a habit a model can pick up from training answers that mention the lecture.
 """
 
 from __future__ import annotations
@@ -27,6 +31,15 @@ _SENT_END = re.compile(r"(?<=[.!?。．！？])(?=\s|$)")
 _HANGUL = re.compile(r"[가-힣]")
 _LATIN = re.compile(r"[A-Za-z]")
 _HAN = re.compile(r"[一-鿿]")
+_POLITE_END = re.compile(r"(니다|세요|어요|아요|해요|에요|예요|죠|요)[.!?。]?\s*$")
+_SOURCE = re.compile(r"강의|슬라이드|수업|교재")
+
+
+def style_stats(answer: str) -> dict:
+    return {
+        "is_polite": bool(_POLITE_END.search(answer.strip())),
+        "mentions_source": bool(_SOURCE.search(answer)),
+    }
 
 
 def word_count(answer: str) -> int:
@@ -68,6 +81,7 @@ def answer_metrics(answer: str, n_tokens: int | None, max_new_tokens: int) -> di
         "n_tokens": n_tokens,
         "max_tokens_reached": (n_tokens is not None and n_tokens >= max_new_tokens),
         **script_stats(answer),
+        **style_stats(answer),
     }
 
 
@@ -88,6 +102,8 @@ def aggregate_rule_metrics(rows: list[dict]) -> dict:
         "empty_rate": _rate(rows, "is_empty"),
         "max_tokens_reached_rate": _rate(rows, "max_tokens_reached"),
         "han_rate": _rate(rows, "has_han"),
+        "polite_rate": _rate(rows, "is_polite"),
+        "source_mention_rate": _rate(rows, "mentions_source"),
         "mean_word_count": round(mean(r["word_count"] for r in rows), 2),
         "max_word_count": max(r["word_count"] for r in rows),
     }

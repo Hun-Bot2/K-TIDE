@@ -334,6 +334,9 @@ def main() -> int:
         json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
     print(f"{report['qa_count']} QA, {report['failure_count']} QC findings")
+    from ktide.tracking import record
+
+    record(lambda r: r.stage == "data", reason="dataset build")
     return int(report["failure_count"] > 0)
 
 

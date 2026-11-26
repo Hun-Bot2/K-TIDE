@@ -31,3 +31,13 @@ def test_han_detection_and_aggregate():
     assert rows[0]["has_han"] and not rows[1]["has_han"]
     agg = aggregate_rule_metrics(rows)
     assert agg["han_rate"] == 0.5 and agg["max_tokens_reached_rate"] == 0.5
+
+
+def test_style_stats_register_and_source_mention():
+    from ktide.metrics import style_stats
+
+    assert style_stats("토큰을 나누는 방법입니다.")["is_polite"]
+    assert style_stats("값이 커져요")["is_polite"]
+    assert not style_stats("토큰을 나누는 방법이다.")["is_polite"]
+    assert style_stats("강의에서는 두 가지로 설명한다.")["mentions_source"]
+    assert not style_stats("두 가지로 나뉜다.")["mentions_source"]

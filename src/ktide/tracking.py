@@ -8,12 +8,13 @@ import json
 import math
 import os
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from time import sleep
 
 from ktide.artifacts import read_json, sha256_json
+from ktide.compare import baseline_dir, deltas, heatmaps, paired
 from ktide.train.data import load_qa
 
 B0 = {
@@ -39,16 +40,34 @@ B0 = {
 M0 = {
     "rubric": ("total", "accuracy", "relevance", "constraints"),
     "reference": ("accuracy", "score"),
-    "rules": ("word_limit", "sentence_limit", "term_preservation", "han_rate"),
+    "rules": (
+        "word_limit",
+        "sentence_limit",
+        "both_limits",
+        "term_preservation",
+        "han_rate",
+        "polite_rate",
+        "source_mention_rate",
+    ),
 }
 
 
-PROJECT = "ktide"
+PROJECT = "K-TIDE"
+SLICE_SPLIT = "during_development"
+EVAL_SPLITS = ("during_development", "test_seen", "test_unseen")
+BREAKDOWN_METRICS = {
+    ("reference", "accuracy"),
+    ("rubric", "total"),
+    ("rules", "word_limit"),
+    ("rules", "term_preservation"),
+}
 TRACKS = ("course", "research")
 # group = experiment family. "controlled" (research 2x2, M1-M4) and "optimization"
 # (assignment model) must never share a group.
 GROUPS = ("baseline", "knowledge", "controlled", "optimization")
 STAGES = ("data", "training", "evaluation")
+# config keys that define what a run is; other config keys may be added to an existing run
+IDENTITY_KEYS = ("condition", "stage", "evaluation_phase", "input_datasets", "output_datasets")
 # Remote runs that were deleted to be rebuilt. W&B does not reuse a deleted run ID, so the
 # replacement gets a new ID derived from the old one. Only these runs may be deleted (--retire).
 RETIRED_RUN_IDS = {
@@ -69,6 +88,17 @@ class Receipt:
     input_datasets: tuple[str, ...]
     output_datasets: tuple[str, ...]
     metrics: dict[str, int | float]
+    # training hyperparameters (config) and the logged loss curve (W&B history); not identity
+    params: dict = field(default_factory=dict, compare=False)
+    history: tuple = field(default=(), compare=False)
+    # links the training run and the evaluation runs of one experiment (condition/run dir)
+    experiment_id: str | None = None
+    # a run logged live (e.g. by the Trainer on Colab) keeps its W&B id; receipts then update it
+    live_run_id: str | None = field(default=None, compare=False)
+    # baseline (M0) | pilot (BF16 M1, kept as a pilot experiment) | controlled (FP16 M1-M4) | ...
+    study_phase: str | None = None
+    # aggregate figures logged once per content hash (W&B media), e.g. domain heatmaps
+    images: dict = field(default_factory=dict, compare=False)
 
     def __post_init__(self):
         if not self.tracks or set(self.tracks) - set(TRACKS):
@@ -88,6 +118,8 @@ class Receipt:
 
     @property
     def run_id(self) -> str:
+        if self.live_run_id:
+            return self.live_run_id
         # Track membership is a tag, not part of the identity: a shared run exists once.
         base = sha256_json([self.stage, self.condition, self.source_id])[:24]
         revision = RETIRED_RUN_IDS.get(base)
@@ -95,6 +127,12 @@ class Receipt:
 
     @property
     def display_name(self) -> str:
+        label = self.source_id.rsplit("colab-t4-", 1)[-1] if "colab-t4-" in self.source_id else ""
+        suffix = f" ({label})" if label else ""
+        if self.stage == "training":
+            return f"{self.condition} · LoRA training{suffix}"
+        if self.stage == "evaluation" and self.condition not in ("B0", "M0"):
+            return f"{self.condition} · Eval v1 pre-freeze{suffix}"
         if self.condition == "B0":
             if self.source_id.endswith("_local-cpu-prelim"):
                 return "B0 · Local CPU FP32 baseline"
@@ -112,14 +150,19 @@ class Receipt:
 
     @property
     def config(self) -> dict:
-        return {
-            "schema_version": 2,
-            "condition": self.condition,
-            "stage": self.stage,
-            "evaluation_phase": self.evaluation_phase,
-            "input_datasets": list(self.input_datasets),
-            "output_datasets": list(self.output_datasets),
-        }
+        return (
+            {
+                "schema_version": 2,
+                "condition": self.condition,
+                "stage": self.stage,
+                "evaluation_phase": self.evaluation_phase,
+                "input_datasets": list(self.input_datasets),
+                "output_datasets": list(self.output_datasets),
+            }
+            | ({"params": self.params} if self.params else {})
+            | ({"experiment_id": self.experiment_id} if self.experiment_id else {})
+            | ({"study_phase": self.study_phase} if self.study_phase else {})
+        )
 
 
 def dataset_version(label: str, *paths: Path) -> str:
@@ -139,7 +182,30 @@ def metric_fields(data: dict, keys, prefix: str) -> dict:
     return result
 
 
-def collect(root: Path) -> list[Receipt]:
+def placement(train_config: dict) -> tuple[tuple[str, ...], str]:
+    """Course optimization runs stay out of the research reports (see ADR 0002)."""
+    if train_config.get("track") == "course":
+        return ("course",), "optimization"
+    return ("course", "research"), "controlled"
+
+
+def study_phase(condition: str, train_config: dict | None) -> str:
+    """M0 = baseline; runs logged before phases existed are the BF16 pilot (M1 data-v1)."""
+    if condition == "M0" or not train_config:
+        return "baseline"
+    if train_config.get("study_phase"):
+        return train_config["study_phase"]
+    return "pilot" if train_config.get("precision") == "bf16" else "controlled"
+
+
+def experiment_id(condition: str, run_name: str, train_config: dict | None) -> str:
+    """One id for a training run and its evaluations: the live W&B run id when there is one."""
+    live = (train_config or {}).get("wandb_run_id")
+    return f"{condition}/{live or run_name}"
+
+
+def collect_runs(root: Path) -> list[Receipt]:
+    """Evaluation and training runs found under runs/ (absent folders are skipped)."""
     records = []
     for run in sorted((root / "runs/baseline/B0").glob("*/metrics.json")):
         source = read_json(run)
@@ -161,39 +227,193 @@ def collect(root: Path) -> list[Receipt]:
             )
         )
 
-    for run in sorted((root / "runs/main/M0").glob("*/eval_metrics.json")):
+    for run in sorted((root / "runs/main").glob("M[0-4]/*/eval_metrics.json")):
+        condition = run.parent.parent.name
+        training = run.parent / "training" / "train_config.json"
+        train_config = read_json(training) if training.is_file() else None
+        trained_on = (train_config["dataset_version"],) if train_config else ()
+        if condition != "M0" and not trained_on:
+            raise ValueError(f"{run.parent}: evaluation without training/train_config.json")
         source = read_json(run)
         metrics = metric_fields(source["meta"], ("n_items", "repeats"), "meta")
+        if source["meta"].get("n_judged") is not None:
+            metrics.update(metric_fields(source["meta"], ("n_judged",), "meta"))
         for section, keys in M0.items():
             for key in keys:
+                if section not in source or key not in source[section]:
+                    continue
                 summary = source[section][key]
                 groups = [("all", summary["all"]["all"])]
                 groups.extend(
                     (split, summary["split"][split])
-                    for split in (
-                        "dev",
-                        "test_seen",
-                        "test_unseen",
-                    )
-                    if split in summary["split"]
+                    for split in EVAL_SPLITS
+                    if split in summary.get("split", {})
                 )
                 for split, values in groups:
                     metrics.update(metric_fields(values, ("n", "mean"), f"{section}/{key}/{split}"))
+                # error-analysis slices (aggregates only) for the headline metrics
+                if (section, key) in BREAKDOWN_METRICS:
+                    for facet in ("domain", "question_type", "term_form"):
+                        for category, values in summary.get(facet, {}).items():
+                            if category in ("None", "null"):
+                                continue
+                            metrics[f"by_{facet}/{section}/{key}/{category}"] = values["mean"]
         version = dataset_version("eval-v1-prefreeze", run.with_name("questions.json"))
+        environment = run.with_name("environment.json")
+        params = {}
+        if environment.is_file():
+            env = read_json(environment)
+            params["generation_env"] = {
+                k: env.get(k)
+                for k in (
+                    "python",
+                    "torch",
+                    "transformers",
+                    "accelerate",
+                    "safetensors",
+                    "huggingface_hub",
+                    "tokenizers",
+                    "gpu",
+                    "cuda",
+                    "device",
+                )
+            }
+        if train_config and train_config.get("track") == "smoke":
+            continue
+        if source.get("slices"):
+            for facet in ("term_form", "domain"):
+                for metric_key in ("rules/term_preservation", "reference/accuracy"):
+                    for category, values in (
+                        source["slices"].get(metric_key, {}).get(facet, {}).items()
+                    ):
+                        if category not in ("None", "null"):
+                            metrics[f"{SLICE_SPLIT}/by_{facet}/{metric_key}/{category}"] = values[
+                                "mean"
+                            ]
+        images = {}
+        base_dir = baseline_dir(root)
+        base = read_json(base_dir / "eval_metrics.json") if base_dir else None
+        if condition != "M0" and base:
+            metrics.update(deltas(source, base))
+            metrics.update(paired(run.parent, base_dir))
+        try:
+            images = {
+                f"heatmap/{name}": path
+                for name, path in heatmaps(
+                    source,
+                    base,
+                    f"{condition} · {study_phase(condition, train_config)}",
+                    run.parent / "wandb_media",
+                ).items()
+            }
+        except ImportError:  # matplotlib is a dev dependency; figures are optional
+            images = {}
+        tracks, group = (
+            placement(train_config) if train_config else (("course", "research"), "baseline")
+        )
         records.append(
             Receipt(
-                ("course", "research"),
-                "baseline",
-                "M0",
+                tracks,
+                group,
+                condition,
                 "evaluation",
                 "preliminary",
                 run.parent.name,
-                (version,),
+                (version, *trained_on),
                 (),
                 metrics,
+                params,
+                experiment_id=experiment_id(condition, run.parent.name, train_config)
+                if train_config
+                else None,
+                study_phase=study_phase(condition, train_config),
+                images=images,
             )
         )
 
+    for config_path in sorted((root / "runs/main").glob("M[1-4]/*/training/train_config.json")):
+        config = read_json(config_path)
+        if config.get("track") == "smoke" or config.get("status", "finished") != "finished":
+            continue
+        log = read_json(config_path.with_name("train_log.json"))
+        losses = [e for e in log if "loss" in e]
+        evals = [e for e in log if "eval_loss" in e]
+        metrics = metric_fields(
+            config, ("n_train", "n_val", "train_seconds", "trainable_params"), "train"
+        )
+        for key, number in (config.get("numerics") or {}).items():
+            if number is not None:
+                metrics[key] = number
+        if losses:
+            metrics["train/final_loss"] = losses[-1]["loss"]
+        if evals:
+            metrics["train/final_eval_loss"] = evals[-1]["eval_loss"]
+        # Trainer log -> the key names the Trainer's W&B callback uses for live runs
+        names = {
+            "loss": "train/loss",
+            "learning_rate": "train/learning_rate",
+            "grad_norm": "train/grad_norm",
+            "epoch": "train/epoch",
+            "eval_loss": "eval/loss",
+        }
+        history = tuple(
+            {"train/global_step": e["step"], **{names[k]: e[k] for k in names if k in e}}
+            for e in log
+            if "step" in e and ("loss" in e or "eval_loss" in e)
+        )
+        params = {
+            "lora": config["lora"],
+            "optim": config["optim"],
+            "max_len": config["max_len"],
+            "seed": config["seed"],
+            "precision": config["precision"],
+            "gpu": config["gpu"],
+            "variant": config["variant"],
+            "base_revision": config["revision"],
+        }
+        for key in ("bundle", "versions", "hf_dataset_revision", "tokenizer_revision"):
+            if key in config:
+                params[key] = config[key]
+        export_path = config_path.with_name("export_report.json")
+        if export_path.is_file():
+            export = read_json(export_path)
+            generation = export.get("effective_generation", {})
+            metrics["export/professor_unpack_model_ok"] = int(
+                export.get("professor_unpack_model") == "ok"
+            )
+            metrics["export/greedy"] = int(generation.get("do_sample") is False)
+            metrics["export/max_new_tokens"] = generation.get("max_new_tokens", 0)
+            if "bytes" in export:
+                metrics["export/zip_bytes"] = export["bytes"]
+            metrics["export/base_files_identical"] = len(export.get("base_files_identical", []))
+            if "sha256" in export:
+                params["export_sha256"] = export["sha256"]
+        run_name = config_path.parent.parent.name
+        tracks, group = placement(config)
+        records.append(
+            Receipt(
+                tracks,
+                group,
+                config["condition"],
+                "training",
+                "not_applicable",
+                run_name,
+                (config["dataset_version"],),
+                (),
+                metrics,
+                params,
+                history,
+                experiment_id=experiment_id(config["condition"], run_name, config),
+                live_run_id=config.get("wandb_run_id"),
+                study_phase=study_phase(config["condition"], config),
+            )
+        )
+    return records
+
+
+def collect_data(root: Path) -> list[Receipt]:
+    """Dataset build receipts from data_private/ (CKU versions, lecture-only QA)."""
+    records = []
     private = root / "data_private"
     parent = ()
     for variant in ("v1", "v2", "v2_1", "v3"):
@@ -284,6 +504,10 @@ def collect(root: Path) -> list[Receipt]:
     return records
 
 
+def collect(root: Path) -> list[Receipt]:
+    return collect_runs(root) + collect_data(root)
+
+
 def mismatches(remote, receipt: Receipt) -> list[str]:
     placement = [
         name
@@ -294,15 +518,24 @@ def mismatches(remote, receipt: Receipt) -> list[str]:
         )
         if expected != actual
     ]
-    return placement + [
-        f"{section}:{key}"
-        for section, expected, actual in (
-            ("config", receipt.config, remote.config),
-            ("summary", receipt.metrics, remote.summary),
-        )
-        for key, value in expected.items()
-        if actual.get(key) != value
-    ]
+    history = []
+    if receipt.history and not receipt.live_run_id and hasattr(remote, "scan_history"):
+        logged = sum(1 for _ in remote.scan_history(keys=["train/global_step"]))
+        if logged < len(receipt.history):
+            history = [f"history:{logged}/{len(receipt.history)}"]
+    return (
+        placement
+        + history
+        + [
+            f"{section}:{key}"
+            for section, expected, actual in (
+                ("config", receipt.config, remote.config),
+                ("summary", receipt.metrics, remote.summary),
+            )
+            for key, value in expected.items()
+            if actual.get(key) != value
+        ]
+    )
 
 
 def verify(api, path: str, receipt: Receipt) -> None:
@@ -354,11 +587,24 @@ def sync(receipts: list[Receipt], entity: str) -> None:
                 config=receipt.config,
                 settings=settings,
             ) as run:
-                if any(run.config.get(key) != value for key, value in receipt.config.items()):
-                    raise ValueError(f"Existing W&B run has different metadata: {path}")
+                identity = {k: receipt.config[k] for k in IDENTITY_KEYS}
+                if any(run.config.get(k, v) != v for k, v in identity.items()):
+                    raise ValueError(f"Existing W&B run has different identity: {path}")
+                run.config.update(receipt.config, allow_val_change=True)
                 run.tags = tuple(receipt.tags)  # resume keeps old tags unless reset
                 if run.name != receipt.display_name:
                     run.name = receipt.display_name
+                if receipt.history and run.starting_step == 0:
+                    # same x-axis as the Trainer's W&B callback
+                    run.define_metric("train/global_step")
+                    run.define_metric("*", step_metric="train/global_step", step_sync=True)
+                    for entry in receipt.history:
+                        run.log(dict(entry))
+                for key, path in receipt.images.items():
+                    digest = hashlib.sha256(Path(path).read_bytes()).hexdigest()
+                    if run.summary.get(f"{key}_sha256") != digest:
+                        run.log({key: wandb.Image(str(path))})
+                        run.summary[f"{key}_sha256"] = digest
                 run.summary.update(receipt.metrics)
     # The SDK service can retain the empty read view from before a newly created run existed.
     wandb.teardown()
@@ -367,6 +613,37 @@ def sync(receipts: list[Receipt], entity: str) -> None:
         path = f"{entity}/{receipt.project}/{receipt.run_id}"
         verify(api, path, receipt)
         print(f"verified {path}", flush=True)
+
+
+DEFAULT_ENTITY = "hun-bot"
+
+
+def record(match=None, root: Path | None = None, reason: str = "") -> bool:
+    """Best-effort W&B record after a pipeline step (local results are already written).
+
+    Syncs the receipts selected by `match` (a predicate on Receipt). Never raises: on any failure
+    (no network, no login, private data absent) it prints how to retry and returns False.
+    Disable with KTIDE_WANDB=0.
+    """
+    if os.environ.get("KTIDE_WANDB", "1") == "0":
+        return False
+    entity = os.environ.get("WANDB_ENTITY", DEFAULT_ENTITY)
+    try:
+        from ktide.professor import REPO_ROOT
+
+        receipts = [r for r in collect((root or REPO_ROOT).resolve()) if match is None or match(r)]
+        if not receipts:
+            return False
+        sync(receipts, entity)
+        return True
+    except Exception as error:  # noqa: BLE001 - recording must never break the pipeline
+        print(
+            f"[ktide] W&B record skipped{f' ({reason})' if reason else ''}: "
+            f"{type(error).__name__}: {str(error)[:200]}\n"
+            f"[ktide] local results are kept; retry: uv run python -m ktide.tracking --sync "
+            f"--entity {entity}"
+        )
+        return False
 
 
 def retire(entity: str, run_ids: list[str], confirm=input) -> None:

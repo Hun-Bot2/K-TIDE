@@ -46,12 +46,26 @@ def effective_generation_config(model, tokenizer, max_new_tokens: int) -> dict:
     from transformers import GenerationConfig
 
     cfg = GenerationConfig(
-        do_sample=False, num_beams=1, max_new_tokens=max_new_tokens, use_cache=True,
-        eos_token_id=tokenizer.eos_token_id, pad_token_id=tokenizer.pad_token_id,
+        do_sample=False,
+        num_beams=1,
+        max_new_tokens=max_new_tokens,
+        use_cache=True,
+        eos_token_id=tokenizer.eos_token_id,
+        pad_token_id=tokenizer.pad_token_id,
     )
     effective, _ = model._prepare_generation_config(cfg)
-    keys = ("do_sample", "num_beams", "max_new_tokens", "temperature", "top_p", "top_k",
-            "repetition_penalty", "eos_token_id", "pad_token_id", "use_cache")
+    keys = (
+        "do_sample",
+        "num_beams",
+        "max_new_tokens",
+        "temperature",
+        "top_p",
+        "top_k",
+        "repetition_penalty",
+        "eos_token_id",
+        "pad_token_id",
+        "use_cache",
+    )
     return {
         "model_generation_config": model.generation_config.to_diff_dict(),
         "effective": {k: getattr(effective, k, None) for k in keys},
@@ -60,8 +74,7 @@ def effective_generation_config(model, tokenizer, max_new_tokens: int) -> dict:
 
 def build_questions(questions: list[str], prefix: str) -> list[Question]:
     return [
-        Question(question_id=f"{prefix}{i:03d}", question=q)
-        for i, q in enumerate(questions, 1)
+        Question(question_id=f"{prefix}{i:03d}", question=q) for i, q in enumerate(questions, 1)
     ]
 
 
@@ -76,8 +89,11 @@ def main(argv: list[str] | None = None) -> Path:
     ap.add_argument("--model", default=DEFAULT_MODEL, help="HF hub model id")
     ap.add_argument("--revision", default=None, help="HF revision (resolved to a commit sha)")
     ap.add_argument("--model-dir", default=None, help="local model folder (overrides --model)")
-    ap.add_argument("--questions-file", default=None,
-                    help="JSON array of {question_id, question}; default = professor public set")
+    ap.add_argument(
+        "--questions-file",
+        default=None,
+        help="JSON array of {question_id, question}; default = professor public set",
+    )
     ap.add_argument("--tag", default=None)
     ap.add_argument("--notes", default="")
     args = ap.parse_args(argv)
@@ -159,18 +175,32 @@ def main(argv: list[str] | None = None) -> Path:
     preds, rule_rows = [], []
     for i, (q, a) in enumerate(zip(questions, answers, strict=True), 1):
         st = status if status == "error" else ("empty" if not a.strip() else "success")
-        preds.append(Prediction(question_number=i, question_id=q.question_id, question=q.question,
-                                answer=a, word_count=len(a.split()), generation_status=st))
+        preds.append(
+            Prediction(
+                question_number=i,
+                question_id=q.question_id,
+                question=q.question,
+                answer=a,
+                word_count=len(a.split()),
+                generation_status=st,
+            )
+        )
         n_tok = len(tokenizer(a, add_special_tokens=False).input_ids)
-        rule_rows.append({"question_number": i, "question_id": q.question_id,
-                          **answer_metrics(a, n_tok, max_new_tokens)})
+        rule_rows.append(
+            {
+                "question_number": i,
+                "question_id": q.question_id,
+                **answer_metrics(a, n_tok, max_new_tokens),
+            }
+        )
 
     write_json(out / "answers.json", answers)
     write_json(out / "predictions.json", [p.model_dump() for p in preds])
     (out / "judge_input.txt").write_text(judge_input_text(preds), encoding="utf-8")
     write_json(out / "rule_metrics.json", rule_rows)
-    write_json(out / "generation_log.json", {"status": status, "error": error,
-                                              "generation_seconds": gen_s})
+    write_json(
+        out / "generation_log.json", {"status": status, "error": error, "generation_seconds": gen_s}
+    )
     print(f"[done] {len(answers)} answers in {gen_s:.1f}s -> {out}")
     return out
 

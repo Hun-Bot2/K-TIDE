@@ -337,6 +337,9 @@ def main():
         print(len(pages))
     else:
         print(revise(root, folder))
+        from ktide.tracking import record
+
+        record(lambda r: r.stage == "data", reason="CKU build")
 
 
 if __name__ == "__main__":

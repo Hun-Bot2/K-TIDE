@@ -50,6 +50,11 @@
   (예: `data_private/extracted/`, `data_private/audit/`). 그 밖의 경로에 쓰지 않는다.
 - 공개 가능한 것은 코드, 설정, 연구 문서, **집계된 수치**뿐이다. 문서와 코드, 테스트에
   교수님 질문 원문, 강의 원문 문장, 모델 답변 원문을 넣지 않는다.
+- **예외(2026-11-26 사용자 결정):** Colab 실행용 번들과 그 결과(`data_private/colab/`, 학습 결과 ZIP)는
+  Hugging Face dataset repo `HunBot/K-TIDE-Dataset`(사용자 결정으로 **공개**)에 올린다.
+  공개 범위는 사용자가 관리한다. GitHub 저장소에는 여전히 커밋하지 않는다.
+- **예외(과제 요건):** 최종 과제 모델 ZIP은 테스트 노트북의 `MODEL_ZIP_URL`로 받을 수 있도록 공개 다운로드 위치
+  (Hugging Face 공개 repo)에 올린다. 가중치는 여전히 GitHub에 커밋하지 않는다.
 - `.gitignore`를 약화하지 않는다. `git add -A` 전에 `git status --short`로 확인한다.
 - `git push`, 공개 저장소 생성, 공개 링크 생성은 사용자가 명시적으로 요청할 때만 한다.
 - 커밋 전 `uv run pytest -q`를 실행한다. `tests/test_privacy.py`가 비공개 파일 추적을 막는다.

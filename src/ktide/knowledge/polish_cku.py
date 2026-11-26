@@ -367,6 +367,9 @@ def main():
             },
         )
     )
+    from ktide.tracking import record
+
+    record(lambda r: r.stage == "data", reason="CKU build")
 
 
 if __name__ == "__main__":
